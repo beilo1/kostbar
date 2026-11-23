@@ -1,0 +1,10 @@
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "kaffeekasse") return;
+    if (action.id === "org.debian.pcsc-lite.access_pcsc") return polkit.Result.YES;
+    if (action.id === "org.debian.pcsc-lite.access_card") {
+        var reader = action.lookup("reader") || "";
+        if (/^(ACS )?ACR(122|1252|1552)/i.test(reader) && !/SAM/i.test(reader)) {
+            return polkit.Result.YES;
+        }
+    }
+});

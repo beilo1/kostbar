@@ -1,0 +1,39 @@
+services:
+  db:
+    extends:
+      file: ../compose.common.yml
+      service: db
+    volumes:
+      - ../nas/init-db.sh:/docker-entrypoint-initdb.d/10-kaffeekasse.sh:ro
+  app:
+    extends:
+      file: ../compose.common.yml
+      service: app
+    environment:
+      KOSTBAR_DEPLOYMENT: qnap
+    volumes:
+      - ./config/server.json:/app/config.json:ro
+  proxy:
+    extends:
+      file: ../compose.common.yml
+      service: proxy
+    environment:
+      KASSE_HOST: "${KASSE_HOST:?Konfiguration zuerst erzeugen}"
+      KASSE_PORT: "${KASSE_PORT:?Konfiguration zuerst erzeugen}"
+    ports:
+      - "${KASSE_BIND_IP:?Konfiguration zuerst erzeugen}:${KASSE_PORT}:${KASSE_PORT}/tcp"
+    volumes:
+      - ./nas/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../nas/start-caddy.sh:/etc/caddy/start-caddy.sh:ro
+
+networks:
+  lan: {}
+  backend:
+    internal: true
+  database:
+    internal: true
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

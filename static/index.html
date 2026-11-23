@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5ee">
+  <title>KoSTbar · Selbstbedienung</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/kiosk.js"></script>
+</head>
+<body class="kiosk">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="KoSTbar Startseite"><img class="brand-logo" src="/static/kostbar-logo.svg" width="171" height="28" alt="KoSTbar"><small id="site-name"></small></a>
+    <div id="top-actions" class="top-actions"></div>
+  </header>
+  <section class="preview-toolbar" id="preview-toolbar" aria-label="Vorschau steuern" hidden>
+    <nav aria-label="Verkaufspunkt auswählen" id="preview-sites"></nav>
+    <button type="button" class="button outline compact" data-preview-card disabled>Testausweis anhalten</button>
+    <button type="button" class="button outline compact" data-preview-card="new" disabled>Neuen Testausweis anhalten</button>
+    <label>Sammelkarte (Testkonto)
+      <select id="preview-progress" disabled></select>
+    </label>
+    <a class="button outline compact" href="" id="preview-reset">Testdaten zurücksetzen</a>
+    <a class="button outline compact" href="/admin">Zur Verwaltung</a>
+    <p id="preview-status" role="status">Testansicht · Testkonto „Test Gast“, PIN 1234 · Alle Vorgänge werden simuliert.</p>
+  </section>
+  <main id="screen" class="screen"><p class="loading" role="status">KoSTbar wird geladen …</p></main>
+  <footer class="site-footer">
+    <nav class="footer-links" aria-label="Rechtliche Hinweise">
+      <a id="terms-link" href="/terms">Nutzungsbedingungen</a>
+      <a id="privacy-link" href="/privacy">Datenschutzerklärung</a>
+    </nav>
+    <span>Vibecoded with ♥</span>
+  </footer>
+  <dialog id="kiosk-dialog" aria-labelledby="kiosk-dialog-title">
+    <div id="kiosk-dialog-content"></div>
+    <form method="dialog"><button class="button outline compact">Schließen</button></form>
+  </dialog>
+  <dialog id="terms-dialog" aria-labelledby="terms-title">
+    <h2 id="terms-title">Nutzungsbedingungen</h2>
+    <div id="terms-dialog-content" role="region" aria-label="Dokumenttext" tabindex="0" autofocus></div>
+    <form method="dialog"><button class="button outline compact">Schließen</button></form>
+  </dialog>
+  <dialog id="timeout-dialog" aria-labelledby="timeout-title" aria-describedby="timeout-description">
+    <p class="eyebrow">INAKTIVITÄT</p>
+    <h2 id="timeout-title">Noch da?</h2>
+    <p id="timeout-description">Du wirst in wenigen Sekunden automatisch abgemeldet.</p>
+    <div class="timeout-clock" role="timer" aria-label="Verbleibende Sekunden"><strong id="timeout-countdown"></strong><span>SEKUNDEN</span></div>
+    <button class="button primary" type="button" data-resume autofocus>Weiter nutzen</button>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

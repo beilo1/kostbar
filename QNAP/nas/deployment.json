@@ -1,0 +1,5 @@
+{
+  "platform": "QNAP",
+  "default_origin": "https://kostbar.internal.lan:18443",
+  "ca_file": "/etc/kaffeekasse-terminal/nas-root.crt"
+}

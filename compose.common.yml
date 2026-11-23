@@ -1,0 +1,61 @@
+# Shared service definitions. Start via QNAP/ or Synology/docker-compose.yml.
+x-kostbar-image: &kostbar-image "${KOSTBAR_APP_IMAGE:-kostbar-app:37.0.4}"
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: kaffeekasse
+      POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD:?Konfiguration zuerst erzeugen}"
+      KASSE_DB_PASSWORD: "${KASSE_DB_PASSWORD:?Konfiguration zuerst erzeugen}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "kaffeekasse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    image: *kostbar-image
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGDATABASE: kaffeekasse
+      PGUSER: kaffeekasse
+      PGPASSWORD: "${KASSE_DB_PASSWORD:?Konfiguration zuerst erzeugen}"
+      KOSTBAR_APP_IMAGE: *kostbar-image
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=256m,mode=1777"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    networks: [backend, database]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.parse, urllib.request;
+          host = urllib.parse.urlsplit(json.load(open('/app/config.json'))['origin']).netloc;
+          urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8765/healthz', headers={'Host': host}), timeout=5).close()
+      interval: 15s
+      timeout: 7s
+      retries: 5
+
+  proxy:
+    image: caddy:2-alpine
+    command: ["/bin/sh", "/etc/caddy/start-caddy.sh"]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [lan, backend]

@@ -1,0 +1,19 @@
+{
+	admin off
+	auto_https off
+}
+
+http://:8765 {
+	@dsm header X-KoSTbar-Proxy-Key {$KASSE_DSM_PROXY_KEY}
+	handle @dsm {
+		reverse_proxy app:8765 {
+			header_up X-KoSTbar-Caddy-Version {env.KASSE_CADDY_RUNTIME}
+			header_up Host {$KASSE_AUTHORITY}
+			header_up -X-KoSTbar-Proxy-Key
+			header_up X-KoSTbar-Client-IP {http.request.header.X-KoSTbar-Client-IP}
+		}
+	}
+	handle {
+		respond 403
+	}
+}

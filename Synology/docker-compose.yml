@@ -1,0 +1,39 @@
+services:
+  db:
+    extends:
+      file: ../compose.common.yml
+      service: db
+    volumes:
+      - ../nas/init-db.sh:/docker-entrypoint-initdb.d/10-kaffeekasse.sh:ro
+  app:
+    extends:
+      file: ../compose.common.yml
+      service: app
+    environment:
+      KOSTBAR_DEPLOYMENT: synology
+    volumes:
+      - ./config/server.json:/app/config.json:ro
+  proxy:
+    extends:
+      file: ../compose.common.yml
+      service: proxy
+    environment:
+      KASSE_AUTHORITY: "${KASSE_AUTHORITY:?Konfiguration zuerst erzeugen}"
+      KASSE_DSM_PROXY_KEY: "${KASSE_DSM_PROXY_KEY:?Proxy-Schlüssel fehlt}"
+    ports:
+      - "127.0.0.1:${KASSE_DSM_PORT:-18765}:8765/tcp"
+    volumes:
+      - ./nas/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../nas/start-caddy.sh:/etc/caddy/start-caddy.sh:ro
+
+networks:
+  lan: {}
+  backend:
+    internal: true
+  database:
+    internal: true
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

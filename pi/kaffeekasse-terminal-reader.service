@@ -1,0 +1,20 @@
+[Unit]
+Description=KoSTbar PC/SC-Kartenleser
+Wants=network-online.target pcscd.socket
+After=network-online.target pcscd.socket usbguard.service
+
+[Service]
+User=kaffeekasse
+Group=kaffeekasse
+ExecStart=/usr/bin/python3 -B /opt/kaffeekasse-terminal/reader.py
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

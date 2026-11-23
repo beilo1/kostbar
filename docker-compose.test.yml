@@ -1,0 +1,28 @@
+# Isolated test stack. Never uses the production .env, bind mounts or data volumes.
+services:
+  test-db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_PASSWORD: kostbar-tests-only
+      POSTGRES_DB: kostbar_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "kostbar_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [tests]
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    depends_on:
+      test-db:
+        condition: service_healthy
+    environment:
+      KOSTBAR_TEST_DSN: postgresql://postgres:kostbar-tests-only@test-db/kostbar_test
+    networks: [tests]
+networks:
+  tests:
+    internal: true

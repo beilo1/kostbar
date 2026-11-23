@@ -1,0 +1,16 @@
+{
+	admin off
+	skip_install_trust
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$KASSE_HOST}:{$KASSE_PORT} {
+	tls internal
+	reverse_proxy app:8765 {
+		header_up X-KoSTbar-Caddy-Version {env.KASSE_CADDY_RUNTIME}
+		header_up X-KoSTbar-Client-IP {http.request.remote.host}
+	}
+}
