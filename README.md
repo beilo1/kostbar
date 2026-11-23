@@ -26,7 +26,7 @@ Die Screenshots zeigen ausschließlich fiktive Beispieldaten.
 
 | Einsatz | Komponente | Referenzkonfiguration |
 | --- | --- | --- |
-| Zentraler Betrieb | Docker-fähiges NAS | QNAP TVS-872XT mit QTS und Container Station oder Synology mit DSM und Container Manager |
+| Zentraler Betrieb | Docker-fähiges NAS | QNAP TVS-872XT mit QTS 5.2.11.3683 Build 20261114 und Container Station oder Synology DS720+ mit DSM 7.4.1-90080 Update 2 und Container Manager |
 | Je Terminal | Raspberry Pi 5 | Raspberry Pi OS 64-Bit mit Desktop, microSD-Karte (32 GB empfohlen), USB-C-Netzteil (27 W empfohlen) |
 | Je Terminal | Touchdisplay | Raspberry Pi Touch Display 2, 10″, per DSI, im Querformat mit 1920 × 1200 Pixeln |
 | Je Terminal | USB-NFC-Leser und Karten | ACS ACR1552U-M1 im PC/SC-Modus, mit kompatiblen NFC-Karten oder Anhängern |
