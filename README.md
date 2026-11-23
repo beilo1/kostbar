@@ -2,11 +2,11 @@
 
 KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am Touchterminal melden sich Nutzer mit NFC-Karte oder PIN an, wählen Produkte und buchen den Einkauf auf ihr Kassenkonto. Das Kassen-Team verwaltet Sortiment, Zahlungen und Auswertungen im Browser.
 
-![KoSTbar-Terminal mit Sortiment und Warenkorb für das Demo-Konto Alex](docs/images/frontend.png)
+![KoSTbar-Terminal Pausenküche mit Begrüßung „Hallo, Max“, Sammelkarte, Bezahlen, Saldo und Warenkorb](docs/images/frontend.png)
 
 ## Neu in v38
 
-Die Nutzungshinweise verlinken das GitHub-Repository von **beilo1** per Link und QR-Code. Der vollständige [MIT-Lizenztext](LICENSE) lässt sich am Terminal lokal lesen. Der A4-Export enthält denselben Projektverweis mit eingebettetem QR-Code. Die Fußzeile zeigt **© 2026 | beilo1**.
+Die Nutzungshinweise verlinken das GitHub-Repository von **beilo1** per Link und QR-Code. Der vollständige [MIT-Lizenztext](LICENSE) lässt sich am Terminal lokal lesen. Der A4-Export enthält denselben Projektverweis mit eingebettetem QR-Code. Die Fußzeile zeigt **© 2026 | beilo1**. Seit v38.0.1 ergänzt sie ab 2027 automatisch das aktuelle Jahr, zum Beispiel **© 2026-2027 | beilo1**.
 
 ## Funktionen
 
@@ -18,11 +18,11 @@ Die Nutzungshinweise verlinken das GitHub-Repository von **beilo1** per Link und
 
 ### Verwaltung
 
-![KoSTbar-Verwaltung mit Buchungsjournal und fiktiven Konten](docs/images/backend.png)
+![KoSTbar-Verwaltung mit Kassenbuch der Pausenküche und fiktiven Konten](docs/images/backend.png)
 
 ### Sammelkarte am Terminal
 
-![Geöffnete digitale Sammelkarte mit sieben von zehn Stempeln](docs/images/sammelkarte.png)
+![Geöffnete digitale Sammelkarte von Max mit sieben von zehn Stempeln](docs/images/sammelkarte.png)
 
 Die Screenshots zeigen ausschließlich fiktive Beispieldaten.
 
@@ -38,9 +38,9 @@ Die Screenshots zeigen ausschließlich fiktive Beispieldaten.
 
 NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine vertrauenswürdige HTTPS-Verbindung zum NAS. Die [Terminal-Anleitung](docs/TERMINALS.md) beschreibt auch WPA-Enterprise mit EAP-TLS.
 
-![Fotorealistische Visualisierung des KoSTbar-Terminals mit limettengrünem 3D-Druck-Gehäuse und USB-NFC-Leser](docs/images/terminal-render.jpg)
+![Fotorealistische Visualisierung des KoSTbar-Terminals Pausenküche mit limettengrünem 3D-Druck-Gehäuse und USB-NFC-Leser](docs/images/terminal-render.jpg)
 
-*Visualisierung des physischen Terminals mit 3D-gedrucktem Gehäuse.*
+*Visualisierung des Terminals mit 3D-gedrucktem Gehäuse und eingebettetem Screenshot aus v38.0.1.*
 
 ## Installation
 
@@ -66,18 +66,18 @@ Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** 
 
 ### App-Image bereitstellen
 
-Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:38.0.0`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
+Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:38.0.1`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
 
 ```bash
-docker build --pull -t kostbar-app:38.0.0 .
-docker image save -o kostbar-app-38.0.0.tar kostbar-app:38.0.0
+docker build --pull -t kostbar-app:38.0.1 .
+docker image save -o kostbar-app-38.0.1.tar kostbar-app:38.0.1
 ```
 
 Die Tar-Datei je Zielsystem einmal importieren. Für die Erstinstallation müssen auch `postgres:17-bookworm` und `caddy:2-alpine` lokal geladen oder erreichbar sein.
 
 ```bash
-sudo docker image load -i kostbar-app-38.0.0.tar
-sudo docker image inspect kostbar-app:38.0.0 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+sudo docker image load -i kostbar-app-38.0.1.tar
+sudo docker image inspect kostbar-app:38.0.1 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
 ```
 
 Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jeweiligen `.env` setzen und im NAS-Unterordner `sudo docker compose -p kostbar pull app` ausführen. Eine Referenz mit Digest legt den Build eindeutig fest.
