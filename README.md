@@ -4,10 +4,6 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 ![KoSTbar-Terminal Pausenküche mit Begrüßung „Hallo, Max“, Sammelkarte, Bezahlen, Saldo und Warenkorb](docs/images/frontend.png)
 
-## Neu in v38
-
-Die Nutzungshinweise verlinken das GitHub-Repository von **beilo1** per Link und QR-Code. Der vollständige [MIT-Lizenztext](LICENSE) lässt sich am Terminal lokal lesen. Der A4-Export enthält denselben Projektverweis mit eingebettetem QR-Code. Die Fußzeile zeigt **© 2026 | beilo1**. Seit v38.0.1 ergänzt sie ab 2027 automatisch das aktuelle Jahr, zum Beispiel **© 2026-2027 | beilo1**.
-
 ## Funktionen
 
 - Anmeldung per NFC und optional per PIN, mit persönlichem Saldo und Buchungsverlauf
