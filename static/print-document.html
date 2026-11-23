@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'">
 <title>KoSTbar · @@TITLE@@</title>
 <!-- Schriften
 Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) PlusJakartaSans-Italic[wght].ttf: Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
@@ -214,7 +214,7 @@ button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .date{margin:5pt 0 0;color:var(--muted);font-size:9.2pt;text-align:right}
 h1{margin:7pt 0 15pt;padding-bottom:10pt;border-bottom:.65pt solid var(--line);color:var(--green);font:34pt/43pt Fraunces,Georgia,serif}
 .document-text{column-count:2;column-gap:25pt;overflow-wrap:anywhere}
-.document-text:has(+ .print-footer){min-height:564pt}
+.document-text:has(+ .print-footer:last-child){min-height:564pt}
 .terms-rich{display:contents}
 .placeholder{color:#6c4e33}
 h2,h3{color:var(--green);margin:0 0 4pt;font-weight:400;break-after:avoid}
@@ -227,6 +227,10 @@ ul,ol{padding-left:14pt}
 .print-footer{margin-top:14pt;padding:9pt 13pt 8pt;border:.65pt solid var(--line);border-radius:6pt;background:#f2f6f3;break-inside:avoid;overflow-wrap:anywhere}
 .print-footer h2{font-size:10pt}
 .print-footer p:last-child{margin-bottom:0}
+.project-notice{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8pt 14pt;margin-top:11pt;padding-top:8pt;border-top:.65pt solid var(--line);break-inside:avoid;overflow-wrap:anywhere}
+.project-notice>div{flex:1 1 180pt;min-width:0}
+.project-notice a{color:var(--green)}
+.project-qr{width:63pt;height:auto;max-width:100%}
 [data-editable]:hover,[data-editable]:focus{outline:1px dashed #7a9b86;outline-offset:3px}
 [data-editable]{cursor:text}
 @media screen and (max-width:830px){
@@ -261,6 +265,7 @@ ul,ol{padding-left:14pt}
   <h1 data-editable contenteditable="plaintext-only">@@TITLE@@</h1>
   <article class="document-text" data-editable contenteditable="plaintext-only">@@CONTENT@@</article>
   @@FOOTER@@
+  @@PROJECT@@
 </main>
 <script>
 'use strict';

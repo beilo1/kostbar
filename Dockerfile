@@ -1,7 +1,7 @@
 FROM python:3.13-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 LABEL org.opencontainers.image.title="KoSTbar" \
-      org.opencontainers.image.version="37.0.4" \
+      org.opencontainers.image.version="38.0.0" \
       org.opencontainers.image.source="https://github.com/beilo1/kostbar" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /app

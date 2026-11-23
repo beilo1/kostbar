@@ -4,6 +4,10 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 ![KoSTbar-Terminal mit Sortiment und Warenkorb für das Demo-Konto Alex](docs/images/frontend.png)
 
+## Neu in v38
+
+Die Nutzungshinweise verlinken das GitHub-Repository von **beilo1** per Link und QR-Code. Der vollständige [MIT-Lizenztext](LICENSE) lässt sich am Terminal lokal lesen. Der A4-Export enthält denselben Projektverweis mit eingebettetem QR-Code. Die Fußzeile zeigt **© 2026 | beilo1**.
+
 ## Funktionen
 
 - Anmeldung per NFC und optional per PIN, mit persönlichem Saldo und Buchungsverlauf
@@ -62,18 +66,18 @@ Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** 
 
 ### App-Image bereitstellen
 
-Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:37.0.4`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
+Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:38.0.0`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
 
 ```bash
-docker build --pull -t kostbar-app:37.0.4 .
-docker image save -o kostbar-app-37.0.4.tar kostbar-app:37.0.4
+docker build --pull -t kostbar-app:38.0.0 .
+docker image save -o kostbar-app-38.0.0.tar kostbar-app:38.0.0
 ```
 
 Die Tar-Datei je Zielsystem einmal importieren. Für die Erstinstallation müssen auch `postgres:17-bookworm` und `caddy:2-alpine` lokal geladen oder erreichbar sein.
 
 ```bash
-sudo docker image load -i kostbar-app-37.0.4.tar
-sudo docker image inspect kostbar-app:37.0.4 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+sudo docker image load -i kostbar-app-38.0.0.tar
+sudo docker image inspect kostbar-app:38.0.0 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
 ```
 
 Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jeweiligen `.env` setzen und im NAS-Unterordner `sudo docker compose -p kostbar pull app` ausführen. Eine Referenz mit Digest legt den Build eindeutig fest.
@@ -90,7 +94,7 @@ Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jewe
    sudo docker compose -p kostbar exec app python server.py schema-status
    ```
 
-4. `/healthz`, Kiosk und Verwaltung prüfen. v37.0.4 verwendet dasselbe Schema wie v36 und die bisherigen v37-Versionen. Beim Upgrade von v35 ergänzt die Anwendung Versionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
+4. `/healthz`, Kiosk und Verwaltung prüfen. v38 verwendet dasselbe Schema wie v36 und v37. Beim Upgrade von v35 ergänzt die Anwendung Versionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
 
 ## Entwicklung und Lizenz
 

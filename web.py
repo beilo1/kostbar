@@ -16,11 +16,13 @@ from finance import Download
 from store import Problem
 
 STATIC = Path(__file__).resolve().parent / "static"
+LICENSE = STATIC.parent / "LICENSE"
 MIME = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2",
         ".svg": "image/svg+xml"}
 ASSETS = {p.name: p for p in STATIC.iterdir() if p.is_file() and p.suffix in (".css", ".js")}
 ASSETS["kostbar-logo.svg"] = STATIC / "kostbar-logo.svg"
 ASSETS["favicon.svg"] = STATIC / "favicon.svg"
+ASSETS["project-qr.svg"] = STATIC / "project-qr.svg"
 ASSETS["print-document.html"] = STATIC / "print-document.html"
 ASSETS.update({f"fonts/{p.name}": p for p in (STATIC / "fonts").glob("*.woff2") if p.is_file()})
 SECURITY = {
@@ -109,6 +111,8 @@ class WsgiApp:
         if method == "POST" and not terminal and environ.get("HTTP_ORIGIN") != app.origin:
             raise Problem(403, "Anfrage kommt von einer fremden Seite.")
         if method == "GET":
+            if path == "/license":
+                return LICENSE.read_bytes(), "text/plain; charset=utf-8", None, None
             file = ASSETS.get(path.removeprefix("/static/")) if path.startswith("/static/") else None
             if path == "/privacy":
                 file = STATIC / "privacy.html"

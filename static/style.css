@@ -414,6 +414,14 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .terms-card section, #terms-dialog-content section { padding: 13px 0; border-top: 1px solid var(--line); }
 .terms-card section h2, #terms-dialog-content section h2 { font-size: 18px; margin-bottom: 5px; }
 .terms-card section p, #terms-dialog-content section p { line-height: 1.55; overflow-wrap: anywhere; }
+.project-notice { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: start; gap: 10px 20px; }
+.project-notice > div { flex: 1 1 240px; min-width: 0; }
+.project-notice p + p { margin-top: 5px; }
+.project-notice a, .project-license summary { color: var(--deep); text-underline-offset: 3px; }
+.project-license { margin-top: 10px; }
+.project-license summary { cursor: pointer; text-decoration: underline; }
+.project-license-content pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.5 var(--text-font); }
+.project-qr { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
 #terms-dialog { width: min(670px, calc(100vw - 30px)); max-height: min(85dvh, 800px); padding: 0; overflow: hidden; }
 #terms-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 #terms-title { padding: 14px clamp(14px, 4vw, 23px) 10px; overflow-wrap: anywhere; }

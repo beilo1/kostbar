@@ -1,5 +1,5 @@
 import { esc } from './shared.js';
-import { formattedTerms, standLabel } from './terms.js';
+import { formattedTerms, projectNotice, standLabel } from './terms.js';
 
 const documents = {
   terms: {title: 'Nutzungshinweise', filename: 'KoSTbar-Nutzungshinweise-A4.html'},
@@ -24,7 +24,7 @@ function takeContact(text) {
     contact: lines.slice(start, end).join('\n')};
 }
 
-export function renderPrintDocument(template, {kind, text, date}) {
+export function renderPrintDocument(template, {kind, text, date, projectQr}) {
   const type = documents[kind];
   if (!type || !text.trim()) throw new Error('Gib zuerst den Text für den Ausdruck ein.');
   const {body, contact} = kind === 'terms' ? takeContact(text) : {body: text, contact: ''};
@@ -38,16 +38,22 @@ export function renderPrintDocument(template, {kind, text, date}) {
     CONTENT: content,
     FOOTER: note ? '<footer class="print-footer" data-editable contenteditable="plaintext-only">' +
       formattedTerms(note) + '</footer>' : '',
+    PROJECT: kind === 'terms'
+      ? projectNotice({print: true, qrSource: 'data:image/svg+xml,' + encodeURIComponent(projectQr)})
+      : '',
     FILENAME: type.filename,
   };
-  return {filename: type.filename, html: template.replace(/@@(TITLE|DATE|CONTENT|FOOTER|FILENAME)@@/g,
+  return {filename: type.filename, html: template.replace(/@@(TITLE|DATE|CONTENT|FOOTER|PROJECT|FILENAME)@@/g,
     (_, key) => values[key])};
 }
 
 export async function downloadPrintDocument(data) {
-  const response = await fetch('/static/print-document.html', {signal: AbortSignal.timeout(5000)});
-  if (!response.ok) throw new Error('Die Druckvorlage konnte nicht geladen werden.');
-  const {filename, html} = renderPrintDocument(await response.text(), data);
+  const [template, qr] = await Promise.all([
+    fetch('/static/print-document.html', {signal: AbortSignal.timeout(5000)}),
+    data.kind === 'terms' ? fetch('/static/project-qr.svg', {signal: AbortSignal.timeout(5000)}) : null,
+  ]);
+  if (!template.ok || (qr && !qr.ok)) throw new Error('Die Druckvorlage konnte nicht geladen werden.');
+  const {filename, html} = renderPrintDocument(await template.text(), {...data, projectQr: await qr?.text()});
   const url = URL.createObjectURL(new Blob([html], {type: 'text/html;charset=utf-8'}));
   const link = document.createElement('a');
   link.href = url;
