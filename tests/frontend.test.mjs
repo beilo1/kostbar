@@ -8,7 +8,7 @@ import {acceptsState, canExtendVisit, sessionViewChanged} from '../static/kiosk-
 import {keyboardMarkup, pinField} from '../static/kiosk-keyboard.js';
 import {loyaltyCardMarkup} from '../static/loyalty-card.js';
 import {shopMarkup} from '../static/shop-view.js';
-import {esc, personLabel} from '../static/shared.js';
+import {esc} from '../static/shared.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const kiosk = fs.readFileSync(path.join(root, 'static/kiosk.js'), 'utf8');
@@ -172,7 +172,7 @@ test('archive and reactivate submit only the desired status from a stale product
   for (const active of [1, 0]) {
     const calls = [];
     const context = {
-      overview: {products: [{id: 7, name: 'Old name', cents: 50, terminals: ['a'], active}]},
+      productsView: {products: [{id: 7, name: 'Old name', cents: 50, terminals: ['a'], active}]},
       esc: String,
       modal: (title, html, label, confirm) => confirm(),
       api: (path, payload) => calls.push([path, JSON.parse(JSON.stringify(payload))]),
@@ -188,8 +188,9 @@ test('admin journal shows escaped reversal details, the reason and the original 
       id: 2, reverses: 1, kind: 'reversal', cents: 130, note: 'Grund <b>spät</b>',
       items: [{name: 'Kaffee <alt>', quantity: 1, price: 130}],
     }], next: null},
-    overview: {people: [], terminals: {}},
-    selectedPerson: '',
+    sites: {terminals: {}, retired_terminals: {}},
+    selectedPersonLabel: '',
+    showReversals: false,
     selectedTerminal: '',
     esc: value => String(value).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
     euro: String,
@@ -207,6 +208,9 @@ test('admin journal shows escaped reversal details, the reason and the original 
   assert.match(rendered, /Kaffee &lt;alt&gt;/);
   assert.match(rendered, /Grund &lt;b&gt;spät&lt;\/b&gt;/);
   assert.match(rendered, /Zu Kauf #1/);
+  assert.match(rendered, /id="journal-reversals"\s*> Stornos anzeigen/);
+  context.showReversals = true;
+  assert.match(vm.runInNewContext(script + '\njournalPanel();', context), /id="journal-reversals" checked/);
   context.journal.entries[0].items = [];
   context.journal.entries[0].reverses = null;
   const expired = vm.runInNewContext(script + '\njournalPanel();', context);
@@ -218,10 +222,10 @@ test('admin journal shows escaped reversal details, the reason and the original 
   assert.match(vm.runInNewContext(script + '\njournalPanel();', context), /class="pill good">Kauf<\/span>/);
 });
 
-test('admin people search keeps separate account fields, card labels and loyalty totals', () => {
+test('admin people renders the server page in order and keeps account fields and card labels', () => {
   const loyalty = {stamps: 0, target: 10, redeemed: 0};
   const context = {
-    overview: {people: [
+    peopleView: {people: [
       {id: 1, last: 'Ährens', first: 'Alicia', department: 'R 10', balance: -1000, card_medium: 'badge',
         terms_current: true, consents: [{version: 'historical-policy-id'}],
         loyalty: {stamps: 4, target: 10, redeemed: 1}},
@@ -230,7 +234,7 @@ test('admin people search keeps separate account fields, card labels and loyalty
         card_medium: 'badge', loyalty},
       {id: 4, last: 'Dorn', first: 'Dana', department: '', balance: 1000, loyalty},
     ], card_types: {classic: 'MIFARE Classic'}, card_media: {badge: 'Dienstausweis'}},
-    search: '', personLabel, esc, peopleSort: {key: 'last', direction: 'ascending'},
+    esc, peopleSort: {key: 'last', direction: 'ascending'},
     dateTime: () => '', amount: String, rowAction: () => '', exportLink: () => '',
   };
   const script = section(admin, 'const peopleSortKeys', 'let session') +
@@ -252,20 +256,67 @@ test('admin people search keeps separate account fields, card labels and loyalty
   assert.match(all, /Konto #3[^]*?<small>Dienstausweis · MIFARE Classic<\/small>/);
   assert.match(all, /Konto #4[^]*?<small>Kartentyp nicht bestimmt<\/small>/);
   assert.equal((all.match(/Kartentyp nicht bestimmt/g) ?? []).length, 1);
-  for (const [key, expected] of Object.entries({last: [1, 2, 3, 4], first: [1, 3, 2, 4],
-    department: [4, 2, 3, 1], balance: [1, 3, 2, 4]})) {
-    context.peopleSort = {key, direction: 'ascending'};
-    assert.deepEqual(ids(render()), expected);
-    context.peopleSort.direction = 'descending';
-    assert.deepEqual(ids(render()), expected.toReversed());
-  }
-  assert.deepEqual(context.overview.people.map(p => p.id), [1, 2, 3, 4]);
-  context.search = 'bruno r 2';
-  const filtered = render();
-  assert.deepEqual(ids(filtered), [2]);
-  assert.match(filtered, /0\/10/);
-  assert.match(filtered, /0 Gratisgetränke eingelöst/);
-  assert.doesNotMatch(filtered, /Alicia/);
+  assert.deepEqual(ids(all), [1, 2, 3, 4]);
+  context.peopleView.people = [context.peopleView.people[2], context.peopleView.people[1]];
+  context.peopleSort = {key: 'balance', direction: 'descending'};
+  const page = render();
+  assert.deepEqual(ids(page), [3, 2]);
+  assert.match(page, /aria-sort="descending"[^]*?data-people-sort="balance"/);
+  assert.match(page, /0\/10/);
+  assert.match(page, /0 Gratisgetränke eingelöst/);
+  assert.doesNotMatch(page, /Alicia/);
+});
+
+test('admin loads only the active panel and passes the reversal filter to the journal cursor', async () => {
+  const requests = [];
+  const context = {
+    URLSearchParams, tab: 'journal', selectedPerson: '7', selectedTerminal: 'b', showReversals: false,
+    session: {super_admin: false}, peopleRequest: 0, peopleSort: {key: 'balance', direction: 'descending'},
+    search: 'Name Referat', journal: {entries: []},
+    async api(path) {
+      requests.push(path);
+      if (path.startsWith('/api/admin/journal?')) return {entries: [], next: 42};
+      if (path.startsWith('/api/admin/people?')) return {people: [{id: 7}], page: 2};
+      if (path.startsWith('/api/admin/payments?')) return {payments: [], next: null};
+      return {};
+    },
+  };
+  const source = section(admin, 'async function loadJournal(', 'function sessionTimer(');
+  const js = vm.createContext(context);
+  vm.runInContext(source, js);
+  await vm.runInContext('loadTab()', js);
+  assert.deepEqual(requests.splice(0), ['/api/admin/journal?reversals=0&person=7&terminal=b', '/api/admin/sites']);
+  context.showReversals = true;
+  await vm.runInContext('loadJournal();', js);
+  await vm.runInContext('loadJournal(true);', js);
+  assert.deepEqual(requests.splice(0), ['/api/admin/journal?reversals=1&person=7&terminal=b',
+    '/api/admin/journal?reversals=1&person=7&terminal=b&before=42']);
+  context.tab = 'people';
+  await vm.runInContext('loadTab(2)', js);
+  assert.deepEqual(requests.splice(0), ['/api/admin/people?search=Name+Referat&page=2&sort=balance&direction=descending']);
+  context.tab = 'payments';
+  context.paymentStatus = 'pending';
+  await vm.runInContext('loadTab()', js);
+  assert.deepEqual(requests, ['/api/admin/payments?status=pending', '/api/admin/sites']);
+});
+
+test('a late account search response cannot replace the newer page', async () => {
+  const resolve = [];
+  const context = {
+    URLSearchParams, tab: 'people', session: {}, peopleRequest: 0, search: 'Alt',
+    peopleSort: {key: 'last', direction: 'ascending'},
+    api: () => new Promise(done => resolve.push(done)),
+  };
+  const js = vm.createContext(context);
+  vm.runInContext(section(admin, 'async function loadPeople(', 'async function loadReport('), js);
+  const older = vm.runInContext('loadPeople()', js);
+  context.search = 'Neu';
+  const newer = vm.runInContext('loadPeople()', js);
+  resolve[1]({people: [{id: 2}], page: 1});
+  assert.equal(await newer, true);
+  resolve[0]({people: [{id: 1}], page: 1});
+  assert.equal(await older, false);
+  assert.equal(context.peopleView.people[0].id, 2);
 });
 
 test('technical view shows cleanup failure and the last successful run', () => {

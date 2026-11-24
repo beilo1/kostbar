@@ -1065,9 +1065,36 @@ class App:
             return self.terms
         if path == "/api/admin/privacy":
             return self.privacy
+        if path == "/api/admin/sites":
+            return {"terminals": self.terminal_labels(), "retired_terminals": self.retired_terminals}
         with data.connect(self.db, snapshot=path in (
-            "/api/admin/journal", "/api/admin/report", "/api/admin/export-balances", "/api/admin/export-account"
+            "/api/admin/journal", "/api/admin/report", "/api/admin/export-balances", "/api/admin/export-account",
+            "/api/admin/people"
         )) as db:
+            if path == "/api/admin/summary":
+                return data.admin_summary(db)
+            if path == "/api/admin/products":
+                return {"products": data.all_products(db), "categories": data.CATEGORIES, "icons": data.ICONS}
+            if path in ("/api/admin/people", "/api/admin/account-options"):
+                search = query.get("search", [""])[0]
+                if len(search) > 240:
+                    raise data.Problem(400, "Der Suchtext darf höchstens 240 Zeichen lang sein.")
+                if "\x00" in search:
+                    raise data.Problem(400, "Ungültiger Suchtext.")
+                words = search.split()
+                page = number(int(query.get("page", ["1"])[0]), 1, 2**31 - 1, "Seite")
+                if path == "/api/admin/account-options":
+                    return data.admin_account_options(db, words, page)
+                sort = query.get("sort", ["last"])[0]
+                direction = query.get("direction", ["ascending"])[0]
+                if sort not in data.ADMIN_PEOPLE_SORTS or direction not in ("ascending", "descending"):
+                    raise data.Problem(400, "Ungültige Sortierung.")
+                with self.policy_lock:
+                    terms, privacy_version = self.terms, self.privacy["version"]
+                result = data.admin_people_page(db, terms["version"], privacy_version, words, sort,
+                                                direction == "descending", page)
+                return {**result, "card_types": CARD_TYPES, "card_media": admin_operations.CARD_MEDIA,
+                        "terms_date": terms.get("date")}
             if path == "/api/admin/paypal-settings":
                 return {"link": self.paypal_link(db)}
             if path == "/api/admin/technical-docs":
@@ -1115,7 +1142,10 @@ class App:
                 site = query.get("terminal", [""])[0]
                 if site and site not in self.historical_terminal_labels():
                     raise data.Problem(400, "Unbekannter Verkaufspunkt.")
-                return data.list_journal(db, person, before, site or None)
+                reversals = query.get("reversals", ["0"])[0]
+                if reversals not in ("0", "1"):
+                    raise data.Problem(400, "Ungültiger Storno-Filter.")
+                return data.list_journal(db, person, before, site or None, include_reversals=reversals == "1")
             if path == "/api/admin/audit":
                 before = number(int(query.get("before", [str(2**53 - 1)])[0]), 1, 2**53 - 1, "Seitengrenze")
                 return data.list_audit(db, before)

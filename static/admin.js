@@ -19,9 +19,11 @@ const navigation = [
 const kinds = {purchase: 'Kauf', payment: 'Zahlung', correction: 'Korrektur', reversal: 'Storno'};
 const iconDefaults = {cold: 'water', hot: 'coffee', snack: 'salami', sweet: 'bar'};
 const peopleSortKeys = {Name: 'last', Vorname: 'first', Referat: 'department', Saldo: 'balance'};
-const peopleCollator = new Intl.Collator('de-DE', {numeric: true, sensitivity: 'base'});
 let session = null;
-let overview;
+let summary;
+let sites = {terminals: {}, retired_terminals: {}};
+let productsView;
+let peopleView = {people: [], page: 1};
 let tab = 'journal';
 let journal = {entries: [], next: null};
 let audit = {entries: [], next: null};
@@ -39,6 +41,11 @@ let privacy;
 let technical;
 let admins = [];
 let selectedPerson = '';
+let selectedPersonLabel = '';
+let showReversals = false;
+let peopleRequest = 0;
+let accountRequest = 0;
+let searchTimer;
 let selectedTerminal = '';
 let search = '';
 let peopleSort = {key: 'last', direction: 'ascending'};
@@ -54,6 +61,15 @@ function signIn() {
   audit = {entries: [], next: null};
   auditPage = 0;
   auditCursors = [null];
+  selectedPerson = '';
+  selectedPersonLabel = '';
+  selectedTerminal = '';
+  showReversals = false;
+  search = '';
+  peopleView = {people: [], page: 1};
+  ++peopleRequest;
+  ++accountRequest;
+  clearTimeout(searchTimer);
   clearTimeout(adminTimer);
   if (editor.open) editor.close();
   top.replaceChildren();
@@ -74,7 +90,7 @@ function handleError(error) {
 }
 
 async function loadJournal(append = false) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({reversals: showReversals ? '1' : '0'});
   if (selectedPerson) params.set('person', selectedPerson);
   if (selectedTerminal) params.set('terminal', selectedTerminal);
   if (append && journal.next) params.set('before', journal.next);
@@ -95,7 +111,38 @@ async function loadAudit(page, cursor) {
   auditCursors[page] = cursor;
 }
 
-async function loadTab() {
+async function loadPeople(page = 1) {
+  const revision = ++peopleRequest;
+  const owner = session;
+  const isCurrent = () => revision === peopleRequest && owner === session && tab === 'people';
+  const params = new URLSearchParams({search, page, sort: peopleSort.key, direction: peopleSort.direction});
+  const result = await api('/api/admin/people?' + params).catch(error => {
+    if (isCurrent()) throw error;
+    return null;
+  });
+  if (!result || !isCurrent()) return false;
+  if (!result.people.length && page > 1) return loadPeople(1);
+  peopleView = {...result, search: params.get('search')};
+  return true;
+}
+
+async function loadReport() {
+  const params = new URLSearchParams({month: reportMonth, terminal: reportTerminal});
+  report = await api('/api/admin/report?' + params);
+  reportMonth = report.month;
+}
+
+async function loadTab(peoplePage = 1) {
+  const needsSites = ['journal', 'payments', 'report', 'products', 'sites', 'preview'].includes(tab);
+  await Promise.all([
+    loadPanel(peoplePage),
+    needsSites ? api('/api/admin/sites').then(result => { sites = result; }) : null,
+  ]);
+}
+
+async function loadPanel(peoplePage) {
+  if (tab === 'people') await loadPeople(peoplePage);
+  if (tab === 'products') productsView = await api('/api/admin/products');
   if (tab === 'journal') await loadJournal();
   if (tab === 'audit') {
     await loadAudit(0, null);
@@ -109,11 +156,7 @@ async function loadTab() {
   if (tab === 'privacy') privacy = await api('/api/admin/privacy');
   if (tab === 'admins') admins = (await api('/api/admin/admins')).admins;
   if (tab === 'technical') technical = await api('/api/admin/technical-docs');
-  if (tab === 'report') {
-    const params = new URLSearchParams({month: reportMonth, terminal: reportTerminal});
-    report = await api('/api/admin/report?' + params);
-    reportMonth = report.month;
-  }
+  if (tab === 'report') await loadReport();
 }
 
 function sessionTimer() {
@@ -129,8 +172,10 @@ function sessionTimer() {
 }
 
 async function refresh(message) {
-  overview = await api('/api/admin/overview');
-  await loadTab();
+  const owner = session;
+  const [nextSummary] = await Promise.all([api('/api/admin/summary'), loadTab(peopleView.page)]);
+  if (owner !== session) return;
+  summary = nextSummary;
   render();
   sessionTimer();
   if (message) notify(message);
@@ -165,8 +210,6 @@ function table(labels, rows, empty, heading = columnHeading) {
 }
 
 function journalPanel() {
-  const opts = overview.people.map(p =>
-    `<option value="${p.id}" ${String(p.id) === selectedPerson ? 'selected' : ''}>${personName(p)}</option>`).join('');
   const rows = journal.entries.map(j => {
     const items = j.items.flatMap(item => {
       const bonus = item.bonus_quantity ?? 0;
@@ -185,8 +228,12 @@ function journalPanel() {
       <td class="num">${amount(j.cents)}</td><td>${j.kind === 'purchase' && !j.reversed_by ? rowAction('reverse', j.id, 'Stornieren', 'undo', 'danger') : ''}</td></tr>`;
   }).join('');
   return `<div class="panel-heading"><div><h2>Kassenbuch</h2><p>Einzelbuchungen der letzten 90 Tage.</p></div>
-    <div class="journal-filters filter-pair"><label class="filter">Konto<select id="journal-person"><option value="">Alle Konten</option>${opts}</select></label>
-    <label class="filter">Verkaufspunkt<select id="journal-terminal"><option value="">Alle</option>${options(historicalSites(), selectedTerminal)}</select></label></div></div>
+    <div class="journal-filters filter-pair">
+      <div class="filter"><span id="journal-account-label">Konto</span><button type="button" class="button outline compact"
+        aria-labelledby="journal-account-label journal-account-button" id="journal-account-button" data-journal-account>${esc(selectedPersonLabel || 'Alle Konten')}</button></div>
+      <label class="filter">Verkaufspunkt<select id="journal-terminal"><option value="">Alle</option>${options(historicalSites(), selectedTerminal)}</select></label>
+      <label class="check-field"><input type="checkbox" id="journal-reversals" ${showReversals ? 'checked' : ''}> Stornos anzeigen</label>
+    </div></div>
     ${table(['Buchung', 'Konto', 'Verkaufspunkt', 'Art', 'Positionen / Grund', 'Betrag', 'Aktion'], rows, 'Für diese Auswahl gibt es noch keine Buchungen.')}
     ${journal.next ? '<button class="button outline compact more" data-more>Ältere Buchungen</button>' : ''}`;
 }
@@ -205,22 +252,10 @@ function peopleHeading(label) {
   </th>`;
 }
 
-function comparePeople(a, b) {
-  const {key, direction} = peopleSort;
-  const {compare} = peopleCollator;
-  const order = key === 'balance' ? a.balance - b.balance : compare(a[key], b[key]);
-  return (direction === 'ascending' ? order : -order) ||
-    compare(a.last, b.last) || compare(a.first, b.first) || a.id - b.id;
-}
-
 function peopleRows() {
-  const words = search.trim().toLocaleLowerCase('de-DE').split(/\s+/);
-  return overview.people.filter(p => {
-    const label = personLabel(p).toLocaleLowerCase('de-DE');
-    return words.every(word => label.includes(word));
-  }).sort(comparePeople).map(p => {
-    const medium = overview.card_media[p.card_medium];
-    const type = overview.card_types[p.card_type];
+  return peopleView.people.map(p => {
+    const medium = peopleView.card_media[p.card_medium];
+    const type = peopleView.card_types[p.card_type];
     return `<tr><td><strong>${esc(p.last)}</strong><small>Konto #${p.id} · seit ${dateTime(p.created)}</small>
     <small>${esc(medium || type || 'Kartentyp nicht bestimmt')}${medium && type ? ' · ' + esc(type) : ''}</small></td>
     <td>${esc(p.first)}</td><td>${esc(p.department || '—')}</td>
@@ -244,22 +279,46 @@ function peopleTable() {
     peopleRows(), 'Keine passenden Konten.', peopleHeading);
 }
 
+function pageControls({page, has_next: hasNext}, action, label) {
+  if (page === 1 && !hasNext) return '';
+  return `<nav class="audit-pagination" aria-label="${label}">
+    <button class="button outline compact" type="button" data-${action}="${page - 1}" ${page === 1 ? 'disabled' : ''}>Zurück</button>
+    <span aria-live="polite">Seite ${page}</span>
+    <button class="button outline compact" type="button" data-${action}="${page + 1}" ${hasNext ? '' : 'disabled'}>Weiter</button></nav>`;
+}
+
+function drawPeopleTable() {
+  return peopleTable() + pageControls(peopleView, 'people-page', 'Benutzerseiten');
+}
+
+async function updatePeopleTable(page = 1, focusSelector) {
+  const container = document.getElementById('people-table');
+  if (!container || !await loadPeople(page) || !container.isConnected) return;
+  const scrollLeft = container.querySelector('.table-wrap').scrollLeft;
+  container.innerHTML = drawPeopleTable();
+  container.querySelector('.table-wrap').scrollLeft = scrollLeft;
+  if (focusSelector) {
+    (container.querySelector(focusSelector) || container.querySelector('[data-people-page]:enabled'))?.focus({preventScroll: true});
+  }
+  sessionTimer();
+}
+
 function peoplePanel() {
-  const current = overview.terms_date ? ' · Nutzungshinweise: ' + standLabel(overview.terms_date) : '';
+  const current = peopleView.terms_date ? ' · Nutzungshinweise: ' + standLabel(peopleView.terms_date) : '';
   return `<div class="panel-heading"><div><h2>Benutzer</h2><p>Konten, Salden, Sammelkarten und Zustimmungen${esc(current)}</p></div>
-    <div class="journal-filters"><label class="filter">Name oder Referat suchen<input id="person-search" value="${esc(search)}" type="search" placeholder="Name, Referat"></label>
+    <div class="journal-filters"><label class="filter">Name oder Referat suchen<input id="person-search" value="${esc(search)}" type="search" maxlength="240" placeholder="Name, Referat"></label>
     ${exportLink('export-balances', 'Gesamtexport', 'Saldenliste als Excel-Datei')}</div></div>
-    <div id="people-table">${peopleTable()}</div>`;
+    <div id="people-table">${drawPeopleTable()}</div>`;
 }
 
 function productsPanel() {
-  const products = overview.products.filter(p => productCategory === 'all' || p.category === productCategory);
-  const filters = Object.entries({all: 'Alle', ...overview.categories}).map(([key, label]) =>
+  const products = productsView.products.filter(p => productCategory === 'all' || p.category === productCategory);
+  const filters = Object.entries({all: 'Alle', ...productsView.categories}).map(([key, label]) =>
     `<button type="button" data-product-category="${key}" aria-pressed="${key === productCategory}">${key === 'all' ? '' : icon(categoryIcons[key], 16) + ' '}${esc(label)}</button>`
   ).join('');
   const rows = products.map(p => `<tr><td><strong>${esc(p.name)}</strong></td>
-    <td><span class="category-cell">${icon(categoryIcons[p.category], 18)} ${esc(overview.categories[p.category])}</span></td>
-    <td class="num">${amount(p.cents)}</td><td>${p.terminals.map(site => esc(overview.terminals[site])).join(', ') || 'Keiner'}</td>
+    <td><span class="category-cell">${icon(categoryIcons[p.category], 18)} ${esc(productsView.categories[p.category])}</span></td>
+    <td class="num">${amount(p.cents)}</td><td>${p.terminals.map(site => esc(sites.terminals[site])).join(', ') || 'Keiner'}</td>
     <td><span class="pill ${p.active && p.terminals.length ? 'good' : 'off'}">${p.active ? (p.terminals.length ? 'Im Sortiment' : 'Ohne Zuordnung') : 'Archiviert'}</span></td>
     <td class="row-actions">${rowAction('product', p.id, 'Bearbeiten', 'edit')}
     ${rowAction('archive', p.id, p.active ? 'Archivieren' : 'Reaktivieren', p.active ? 'close' : 'undo', p.active ? 'warn' : 'good')}
@@ -433,7 +492,7 @@ function changePassword() {
 }
 
 function resetPin(id) {
-  const person = overview.people.find(p => p.id === id);
+  const person = peopleView.people.find(p => p.id === id);
   modal('PIN zurücksetzen', `<p><strong>${personName(person)}</strong> vergibt bei der nächsten Anmeldung mit Ausweis selbst eine neue PIN. Aktive Sitzungen des Kontos werden beendet.</p>`,
     'PIN zurücksetzen', () => api('/api/admin/reset-pin', {id}));
 }
@@ -475,7 +534,7 @@ function auditPanel() {
 
 function sitesPanel() {
   const canManage = session.super_admin;
-  const rows = Object.entries(overview.terminals).map(([id, label]) =>
+  const rows = Object.entries(sites.terminals).map(([id, label]) =>
     `<tr><td>${esc(id.toUpperCase())}</td><td><strong>${esc(label)}</strong></td>
     <td data-terminal-status="${esc(id)}"><span class="pill">Wird geprüft …</span></td>
     ${canManage ? `<td><div class="action-list">${rowAction('edit-site', id, 'Umbenennen', 'edit')}
@@ -524,13 +583,13 @@ function createSite() {
 
 function renameSite(id) {
   modal('Verkaufspunkt umbenennen',
-    `<label>Anzeigename<input name="label" maxlength="60" value="${esc(overview.terminals[id])}" required></label>`,
+    `<label>Anzeigename<input name="label" maxlength="60" value="${esc(sites.terminals[id])}" required></label>`,
     'Speichern', fields => api('/api/admin/terminal', {id, label: fields.get('label')}));
 }
 
 function deleteSite(id) {
   modal('Verkaufspunkt löschen',
-    `<p><strong>${esc(overview.terminals[id])}</strong> wird vom Kiosk getrennt und aus dem aktiven Sortiment entfernt.
+    `<p><strong>${esc(sites.terminals[id])}</strong> wird vom Kiosk getrennt und aus dem aktiven Sortiment entfernt.
       Buchungen und Auswertungen bleiben erhalten. Die Kennung bleibt für die Historie reserviert.</p>`,
     'Verkaufspunkt löschen', () => api('/api/admin/terminal-delete', {id}));
 }
@@ -545,14 +604,14 @@ function editPaypalSettings() {
 
 function pairSite(id) {
   modal('Kiosk koppeln',
-    `<p>${esc(overview.terminals[id])} · Terminal ${id.toUpperCase()}</p>
+    `<p>${esc(sites.terminals[id])} · Terminal ${id.toUpperCase()}</p>
      <label>Achtstelliger Code<input name="code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="off" required></label>`,
     'Kopplung bestätigen', fields => api('/api/admin/kiosk-pair', {id, code: fields.get('code')}));
 }
 
 function unpairSite(id) {
   modal('Kopplung lösen',
-    `<p>Der Browser von ${esc(overview.terminals[id])} wird abgemeldet. Danach kannst du den Kiosk erneut koppeln.</p>`,
+    `<p>Der Browser von ${esc(sites.terminals[id])} wird abgemeldet. Danach kannst du den Kiosk erneut koppeln.</p>`,
     'Kopplung lösen', () => api('/api/admin/kiosk-unpair', {id}));
 }
 
@@ -567,7 +626,7 @@ function renderNavigation() {
 function previewPanel() {
   return `<div class="panel-heading"><div><h2>Terminal-Vorschau</h2>
     <p>Teste Anmeldung, Einkauf, Sammelkarte und Zahlungen mit dem aktuellen Sortiment je Verkaufspunkt.</p></div></div>
-    <div class="action-list">${Object.entries(overview.terminals).map(([id, label]) =>
+    <div class="action-list">${Object.entries(sites.terminals).map(([id, label]) =>
       `<a class="button primary compact" href="/api/admin/terminal-preview/page?terminal=${encodeURIComponent(id)}"
         target="_blank" rel="noopener">Terminal ${esc(id.toUpperCase())} · ${esc(label)}</a>`).join('')}</div>`;
 }
@@ -576,15 +635,13 @@ function render() {
   top.innerHTML = `<span class="operator">${icon('lock', 17)} ${esc(session.name)}${session.super_admin ? ' · Super-Admin' : ''}</span>
     <button class="button outline compact" data-change-password>${icon('key', 17)} Passwort ändern</button>
     <button class="button outline compact" data-admin-logout>${icon('exit', 17)} Abmelden</button>`;
-  const outstanding = overview.people.reduce((sum, p) => sum + Math.max(0, -p.balance), 0);
-  const credit = overview.people.reduce((sum, p) => sum + Math.max(0, p.balance), 0);
   const panels = {journal: journalPanel, people: peoplePanel, products: productsPanel, audit: auditPanel,
     payments: paymentsPanel, report: reportPanel, terms: termsPanel, privacy: termsPanel, admins: adminsPanel,
     sites: sitesPanel, technical: () => technicalPanel(technical), preview: previewPanel};
   admin.innerHTML = `<section class="admin-title"><div><h1>Administrationsbereich</h1></div></section>
-    <div class="metrics"><div><small>OFFENE BETRÄGE</small><strong>${euro(outstanding)}</strong></div>
-    <div><small>GUTHABEN</small><strong>${euro(credit)}</strong></div>
-    <div><small>AKTIVE KONTEN</small><strong>${overview.people.filter(p => p.active).length}</strong></div></div>
+    <div class="metrics"><div><small>OFFENE BETRÄGE</small><strong>${euro(summary.outstanding)}</strong></div>
+    <div><small>GUTHABEN</small><strong>${euro(summary.credit)}</strong></div>
+    <div><small>AKTIVE KONTEN</small><strong>${summary.active}</strong></div></div>
     <nav class="admin-navigation" aria-label="Verwaltungsbereiche">${renderNavigation()}</nav>
     <section class="admin-panel">${panels[tab]()}</section>`;
   for (const group of admin.querySelectorAll('.admin-nav-group')) {
@@ -612,22 +669,56 @@ function modal(title, fields, submitLabel, action) {
   if (!editor.open) editor.showModal();
 }
 
+async function loadAccountOptions(page = 1) {
+  const field = editor.querySelector('#journal-account-search');
+  const container = editor.querySelector('#journal-account-results');
+  if (!editor.open || !field || !container) return;
+  const revision = ++accountRequest;
+  const params = new URLSearchParams({search: field.value, page});
+  try {
+    const result = await api('/api/admin/account-options?' + params);
+    if (revision !== accountRequest || !editor.open || !container.isConnected) return;
+    const rows = result.people.map(person =>
+      `<button class="button outline compact" type="button" data-journal-select="${person.id}">
+        <span>${personName(person)}</span><small>Konto #${person.id}</small></button>`).join('');
+    container.innerHTML = (rows ? `<div class="journal-account-list">${rows}</div>` : '<p>Keine passenden Konten.</p>') +
+      pageControls(result, 'account-page', 'Kontenauswahl');
+    sessionTimer();
+  } catch (error) {
+    if (revision !== accountRequest || !editor.open || !container.isConnected) return;
+    if (error.status === 401) handleError(error);
+    else container.textContent = error.message;
+  }
+}
+
+async function chooseJournalAccount() {
+  editor.innerHTML = `<section><h2 id="editor-title">Konto auswählen</h2>
+    <label>Name oder Referat suchen<input id="journal-account-search" type="search" maxlength="240" autofocus></label>
+    <div id="journal-account-results" aria-live="polite"><p>Konten werden geladen …</p></div>
+    <div class="form-actions">
+      <button type="button" class="button outline" data-close>Abbrechen</button>
+      <button type="button" class="button outline" data-journal-select="">Alle Konten</button>
+    </div></section>`;
+  editor.showModal();
+  await loadAccountOptions();
+}
+
 function options(list, selected) {
   return Object.entries(list).map(([key, label]) => `<option value="${key}" ${key === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
 }
 
 function historicalSites() {
-  return {...overview.terminals, ...overview.retired_terminals};
+  return {...sites.terminals, ...sites.retired_terminals};
 }
 
 function editProduct(id) {
-  const p = overview.products.find(product => product.id === id);
+  const p = productsView.products.find(product => product.id === id);
   modal(p ? 'Produkt bearbeiten' : 'Produkt hinzufügen',
     `<label>Produktname<input name="name" maxlength="80" value="${esc(p?.name)}" required></label>
-     <div class="field-pair"><label>Kategorie<select name="category">${options(overview.categories, p?.category)}</select></label>
-     <label>Symbol<select name="icon">${options(overview.icons, p?.icon)}</select></label></div>
+     <div class="field-pair"><label>Kategorie<select name="category">${options(productsView.categories, p?.category)}</select></label>
+     <label>Symbol<select name="icon">${options(productsView.icons, p?.icon)}</select></label></div>
      <label>Preis in Euro<input name="price" inputmode="decimal" value="${p ? (p.cents / 100).toFixed(2).replace('.', ',') : ''}" placeholder="0,50" required></label>
-     <fieldset class="location-options"><legend>Verfügbar an</legend>${Object.entries(overview.terminals).map(([id, label]) =>
+     <fieldset class="location-options"><legend>Verfügbar an</legend>${Object.entries(sites.terminals).map(([id, label]) =>
         `<label class="check-field"><input type="checkbox" name="terminal" value="${id}" ${p?.terminals.includes(id) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</fieldset>
      <label class="check-field"><input type="checkbox" name="active" ${p?.active === 0 ? '' : 'checked'}> Im Sortiment anzeigen</label>`,
     'Speichern', fields => api('/api/admin/product', {
@@ -637,14 +728,14 @@ function editProduct(id) {
 }
 
 function deleteProduct(id) {
-  const p = overview.products.find(product => product.id === id);
+  const p = productsView.products.find(product => product.id === id);
   modal('Produkt dauerhaft ausblenden',
     `<p><strong>${esc(p.name)}</strong> dauerhaft aus Sortiment und Produktverwaltung ausblenden? Frühere Buchungen und Auswertungen bleiben erhalten. In der Oberfläche lässt sich dieser Schritt nicht rückgängig machen. Zum späteren Reaktivieren bitte stattdessen „Archivieren“ verwenden.</p>`,
     'Dauerhaft ausblenden', () => api('/api/admin/delete-product', {id}));
 }
 
 function archiveProduct(id) {
-  const p = overview.products.find(product => product.id === id);
+  const p = productsView.products.find(product => product.id === id);
   modal(p.active ? 'Produkt archivieren' : 'Produkt reaktivieren',
     '<p><strong>' + esc(p.name) + '</strong> ' + (p.active ? 'aus dem Sortiment nehmen?' : 'im Sortiment anzeigen?') + '</p>',
     p.active ? 'Archivieren' : 'Reaktivieren',
@@ -652,19 +743,19 @@ function archiveProduct(id) {
 }
 
 function editPerson(id) {
-  const p = overview.people.find(person => person.id === id);
+  const p = peopleView.people.find(person => person.id === id);
   modal('Konto bearbeiten',
     `<div class="field-pair"><label>Vorname<input name="first" maxlength="60" value="${esc(p.first)}" required></label>
      <label>Nachname<input name="last" maxlength="60" value="${esc(p.last)}" required></label></div>
      <label>Referat<input name="department" maxlength="80" value="${esc(p.department)}"></label>
-     <label>Kartenträger<select name="card_medium">${options({'': 'Nicht angegeben', ...overview.card_media}, p.card_medium || '')}</select></label>
+     <label>Kartenträger<select name="card_medium">${options({'': 'Nicht angegeben', ...peopleView.card_media}, p.card_medium || '')}</select></label>
      <label class="check-field"><input type="checkbox" name="active" ${p.active ? 'checked' : ''} ${p.closed_at ? 'disabled' : ''}> Konto aktiv</label>`,
     'Speichern', fields => api('/api/admin/person', {id, first: fields.get('first'), last: fields.get('last'),
       department: fields.get('department'), card_medium: fields.get('card_medium'), active: fields.has('active')}));
 }
 
 function closeAccount(id) {
-  const p = overview.people.find(person => person.id === id);
+  const p = peopleView.people.find(person => person.id === id);
   modal('Konto schließen',
     `<p>Der Zugang für <strong>${personName(p)}</strong> wird sofort gesperrt. Aktueller Saldo ${amount(p.balance)}.</p>
      <p>Die Löschung erfolgt automatisch, sobald der Saldo ausgeglichen ist und die verbleibenden Buchungen und PayPal-Meldungen abgelaufen sind.</p>`,
@@ -672,7 +763,7 @@ function closeAccount(id) {
 }
 
 function bookPerson(id) {
-  const p = overview.people.find(person => person.id === id);
+  const p = peopleView.people.find(person => person.id === id);
   const request = idempotencyKey();
   modal('Zahlung oder Korrektur buchen',
     `<p><strong>${personName(p)}</strong> · aktueller Saldo ${amount(p.balance)}</p>
@@ -692,10 +783,11 @@ function reverseEntry(id) {
     'Storno buchen', fields => api('/api/admin/reverse', {id, note: fields.get('note')}));
 }
 
-function captureCard(id) {
-  const person = overview.people.find(p => p.id === id);
+async function captureCard(id) {
+  const person = peopleView.people.find(p => p.id === id);
+  sites = await api('/api/admin/sites');
   modal('Karte ersetzen', `<p>Konto <strong>${personName(person)}</strong></p>
-    <label>Leser am Verkaufspunkt<select name="terminal">${options(overview.terminals)}</select></label>`,
+    <label>Leser am Verkaufspunkt<select name="terminal">${options(sites.terminals)}</select></label>`,
     'Leser aktivieren', async fields => {
       const terminal = fields.get('terminal');
       await api('/api/admin/capture-start', {id, terminal});
@@ -707,7 +799,7 @@ function captureCard(id) {
 function waitForCard(terminal) {
   capturing = terminal;
   modal('Neue Karte anhalten',
-    `<p>Leser an <strong>${esc(overview.terminals[terminal])}</strong></p>
+    `<p>Leser an <strong>${esc(sites.terminals[terminal])}</strong></p>
     <p>Halte ausschließlich den neuen Ausweis an diesen Leser. Das Konto und seine Buchungen bleiben bestehen.</p>
     <p id="capture-status" class="hint" role="status">Warte auf die neue Karte …</p>`,
     'Karte zuordnen', () => api('/api/admin/capture-confirm', {terminal}));
@@ -809,17 +901,6 @@ document.addEventListener('click', async event => {
   if (!button || busy || !session) return;
   const d = button.dataset;
   if ('close' in d) { editor.close(); return; }
-  if (d.peopleSort) {
-    const key = d.peopleSort;
-    const table = document.getElementById('people-table');
-    const scrollLeft = table.querySelector('.table-wrap').scrollLeft;
-    peopleSort = {key, direction: peopleSort.key === key && peopleSort.direction === 'ascending' ? 'descending' : 'ascending'};
-    table.innerHTML = peopleTable();
-    table.querySelector('.table-wrap').scrollLeft = scrollLeft;
-    table.querySelector(`[data-people-sort="${key}"]`).focus({preventScroll: true});
-    sessionTimer();
-    return;
-  }
   if ('documentExport' in d) {
     const form = button.form;
     const published = d.documentExport === 'published';
@@ -854,13 +935,53 @@ document.addEventListener('click', async event => {
       return;
     }
     if (d.tab || d.show) {
+      const previousTab = tab;
+      const previousFilters = [selectedPerson, selectedPersonLabel, selectedTerminal];
       tab = d.tab || 'journal';
-      if (d.show) { selectedPerson = d.show; selectedTerminal = ''; }
-      if (tab === 'people' || tab === 'preview') overview = await api('/api/admin/overview');
-      await loadTab();
+      if (d.show) {
+        selectedPerson = d.show;
+        selectedPersonLabel = personLabel(peopleView.people.find(person => String(person.id) === d.show));
+        selectedTerminal = '';
+      }
+      try { await loadTab(); }
+      catch (error) {
+        tab = previousTab;
+        [selectedPerson, selectedPersonLabel, selectedTerminal] = previousFilters;
+        throw error;
+      }
       render();
       const selected = admin.querySelector('.admin-navigation [aria-current="page"]');
       (selected?.closest('details')?.querySelector('summary') || selected)?.focus();
+    }
+    if (d.peopleSort) {
+      clearTimeout(searchTimer);
+      const key = d.peopleSort;
+      const previousSort = peopleSort;
+      peopleSort = {key, direction: key === peopleSort.key && peopleSort.direction === 'ascending' ? 'descending' : 'ascending'};
+      try { await updatePeopleTable(1, `[data-people-sort="${key}"]`); }
+      catch (error) { peopleSort = previousSort; throw error; }
+    }
+    if (d.peoplePage) {
+      clearTimeout(searchTimer);
+      const page = peopleView.search === search ? Number(d.peoplePage) : 1;
+      await updatePeopleTable(page, '[data-people-page="' + d.peoplePage + '"]:enabled');
+    }
+    if ('journalAccount' in d) await chooseJournalAccount();
+    if (d.accountPage) {
+      clearTimeout(searchTimer);
+      await loadAccountOptions(Number(d.accountPage));
+      editor.querySelector('[data-account-page]:enabled')?.focus();
+    }
+    if ('journalSelect' in d) {
+      const previousPerson = [selectedPerson, selectedPersonLabel];
+      selectedPerson = d.journalSelect;
+      selectedPersonLabel = selectedPerson ? button.querySelector('span').textContent : '';
+      try { await loadJournal(); }
+      catch (error) { [selectedPerson, selectedPersonLabel] = previousPerson; throw error; }
+      editor.close();
+      render();
+      document.getElementById('journal-account-button').focus();
+      sessionTimer();
     }
     if ('auditNext' in d && audit.next) {
       await loadAudit(auditPage + 1, audit.next);
@@ -898,7 +1019,7 @@ document.addEventListener('click', async event => {
     if (d.closeAccount) closeAccount(Number(d.closeAccount));
     if (d.book) bookPerson(Number(d.book));
     if (d.reverse) reverseEntry(Number(d.reverse));
-    if (d.capture) captureCard(Number(d.capture));
+    if (d.capture) await captureCard(Number(d.capture));
     if (d.tab || d.show || 'more' in d || d.capture) sessionTimer();
   } catch (error) {
     handleError(error);
@@ -911,17 +1032,31 @@ document.addEventListener('change', async event => {
   if (event.target.name === 'category' && editor.open && editor.querySelector('[name=icon]')) {
     editor.querySelector('[name=icon]').value = iconDefaults[event.target.value];
   }
+  const field = event.target;
   const filters = {
-    'journal-person': value => { selectedPerson = value; },
-    'journal-terminal': value => { selectedTerminal = value; },
-    'payment-status': value => { paymentStatus = value; },
-    'report-month': value => { reportMonth = value; },
-    'report-terminal': value => { reportTerminal = value; },
+    'journal-terminal': () => { selectedTerminal = field.value; return loadJournal(); },
+    'journal-reversals': async () => {
+      const previous = showReversals;
+      showReversals = field.checked;
+      try { await loadJournal(); }
+      catch (error) { field.checked = showReversals = previous; throw error; }
+    },
+    'payment-status': () => { paymentStatus = field.value; return loadPayments(); },
+    'report-month': () => { reportMonth = field.value; return loadReport(); },
+    'report-terminal': () => { reportTerminal = field.value; return loadReport(); },
   };
-  if (!filters[event.target.id] || busy) return;
-  filters[event.target.id](event.target.value);
+  if (!session || !Object.hasOwn(filters, field.id)) return;
+  if (busy) {
+    if (field.id === 'journal-reversals') field.checked = showReversals;
+    return;
+  }
   busy = true;
-  try { await loadTab(); render(); sessionTimer(); } catch (error) { handleError(error); } finally { busy = false; }
+  try {
+    await filters[field.id]();
+    render();
+    document.getElementById(field.id)?.focus({preventScroll: true});
+    sessionTimer();
+  } catch (error) { handleError(error); } finally { busy = false; }
 });
 
 document.addEventListener('input', event => {
@@ -929,9 +1064,21 @@ document.addEventListener('input', event => {
     document.getElementById('terms-preview').innerHTML = formattedTerms(event.target.value);
     return;
   }
-  if (event.target.id !== 'person-search') return;
-  search = event.target.value;
-  document.getElementById('people-table').innerHTML = peopleTable();
+  const field = event.target;
+  if (field.id === 'person-search') {
+    search = field.value;
+    ++peopleRequest;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (tab === 'people' && field.isConnected) updatePeopleTable().catch(handleError);
+    }, 220);
+  } else if (field.id === 'journal-account-search') {
+    ++accountRequest;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      if (field.isConnected) loadAccountOptions();
+    }, 220);
+  }
 });
 
 setup();

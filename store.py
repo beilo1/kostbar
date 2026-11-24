@@ -475,16 +475,16 @@ def _items_for_page(db, page):
     return items
 
 
-def list_journal(db, person, before, terminal=None, *, cutoff=None):
+def list_journal(db, person, before, terminal=None, *, cutoff=None, include_reversals=True):
     cutoff = cutoff if cutoff is not None else booking_cutoff()
     rows = db.execute(
         """SELECT j.*, p.first, p.last, p.department, r.id AS reversed_by, purchase.id AS retained_reverses
            FROM journal j JOIN people p ON p.id=j.person LEFT JOIN journal r ON r.reverses=j.id
            LEFT JOIN journal purchase ON purchase.id=j.reverses AND purchase.at>%s
            WHERE j.id<%s AND j.at>%s AND (CAST(%s AS BIGINT) IS NULL OR j.person=%s)
-             AND (CAST(%s AS TEXT) IS NULL OR j.terminal=%s)
+             AND (CAST(%s AS TEXT) IS NULL OR j.terminal=%s) AND (%s OR j.kind <> 'reversal')
            ORDER BY j.id DESC LIMIT 51""",
-        (cutoff, before, cutoff, person, person, terminal, terminal),
+        (cutoff, before, cutoff, person, person, terminal, terminal, include_reversals),
     ).fetchall()
     page = [dict(row) for row in rows[:50]]
     for row in page:
@@ -498,6 +498,85 @@ def list_journal(db, person, before, terminal=None, *, cutoff=None):
         item["items"] = items.get(row["reverses"] or row["id"], [])
         entries.append(item)
     return {"entries": entries, "next": entries[-1]["id"] if len(rows) > 50 else None}
+
+
+ADMIN_PEOPLE_PAGE_SIZE = 50
+ADMIN_PEOPLE_SORTS = ("last", "first", "department", "balance")
+_PERSON_BALANCE = "COALESCE(c.cents,0) + COALESCE((SELECT SUM(j.cents) FROM journal j WHERE j.person=p.id),0)"
+_PERSON_SEARCH = """NOT EXISTS (
+    SELECT FROM unnest(%s::text[]) AS search(word)
+    WHERE strpos(lower(concat_ws(' ',p.first,p.last,p.department) COLLATE pg_catalog."de-x-icu"),
+                 lower(search.word COLLATE pg_catalog."de-x-icu"))=0
+)"""
+
+
+def _natural_order(column):
+    # Normalize case and accents, and pad digit groups so that R 2 sorts before R 10.
+    return rf"""COALESCE((
+        SELECT string_agg(CASE WHEN segment[1] IS NULL THEN segment[2] ELSE lpad(segment[1],80,'0') END,
+                          '' ORDER BY position)
+        FROM regexp_matches(regexp_replace(normalize(lower(p.{column} COLLATE pg_catalog."de-x-icu"), NFD),
+                                           U&'[\0300-\036F]', '', 'g') COLLATE "C",
+                            '([0-9]+)|([^0-9]+)', 'g') WITH ORDINALITY AS parts(segment, position)
+    ), '') COLLATE pg_catalog."de-x-icu" """
+
+
+def admin_summary(db):
+    return dict(db.execute(
+        """SELECT COALESCE(SUM(GREATEST(-balances.balance,0)),0)::bigint AS outstanding,
+                  COALESCE(SUM(GREATEST(balances.balance,0)),0)::bigint AS credit,
+                  COUNT(*) FILTER (WHERE balances.active<>0) AS active
+           FROM (SELECT p.active, COALESCE(c.cents,0) + COALESCE(j.cents,0) AS balance
+                 FROM people p LEFT JOIN carried_balances c ON c.person=p.id
+                 LEFT JOIN (SELECT person, SUM(cents) AS cents FROM journal GROUP BY person) j ON j.person=p.id) balances"""
+    ).fetchone())
+
+
+def admin_people_page(db, version, privacy_version, words, sort, descending, page):
+    if sort not in ADMIN_PEOPLE_SORTS:
+        raise ValueError("Invalid account sort.")
+    primary = _PERSON_BALANCE if sort == "balance" else _natural_order(sort)
+    direction = "DESC" if descending else "ASC"
+    tie_breakers = [_natural_order(key) for key in ("last", "first") if key != sort]
+    order = ", ".join([f"{primary} {direction}", *tie_breakers, "p.id"])
+    balances_join = "LEFT JOIN carried_balances c ON c.person=p.id" if sort == "balance" else ""
+    size = ADMIN_PEOPLE_PAGE_SIZE
+    rows = db.execute(
+        f"""SELECT p.id FROM people p {balances_join} WHERE {_PERSON_SEARCH}
+            ORDER BY {order} LIMIT %s OFFSET %s""",
+        (words, size + 1, (page - 1) * size),
+    ).fetchall()
+    ids = [row["id"] for row in rows[:size]]
+    people = []
+    if ids:
+        for row in db.execute(
+            f"""SELECT p.id,p.first,p.last,p.department,p.active,p.created,p.card_type,p.card_medium,p.closed_at,
+                       EXISTS(SELECT 1 FROM manual_credentials m WHERE m.person=p.id) AS manual_enabled,
+                       {_PERSON_BALANCE} AS balance, COALESCE(l.progress,0) AS loyalty_progress,
+                       COALESCE(l.redeemed,0) AS loyalty_redeemed,
+                       EXISTS(SELECT 1 FROM policy_acceptances a WHERE a.person=p.id AND a.terms_version=%s
+                              AND a.privacy_version=%s) AS terms_current
+                FROM unnest(%s::bigint[]) WITH ORDINALITY AS page(id, position)
+                JOIN people p ON p.id=page.id LEFT JOIN carried_balances c ON c.person=p.id
+                LEFT JOIN loyalty_cards l ON l.person=p.id ORDER BY page.position""",
+            (version, privacy_version, ids),
+        ):
+            person = dict(row)
+            loyalty = loyalty_card_status(person.pop("loyalty_progress"))
+            loyalty["redeemed"] = person.pop("loyalty_redeemed")
+            person.update(balance=int(person["balance"]), loyalty=loyalty)
+            people.append(person)
+    return {"people": people, "page": page, "has_next": len(rows) > size}
+
+
+def admin_account_options(db, words, page):
+    size = ADMIN_PEOPLE_PAGE_SIZE
+    rows = db.execute(
+        f"""SELECT p.id,p.first,p.last,p.department FROM people p WHERE {_PERSON_SEARCH}
+            ORDER BY {_natural_order("last")}, {_natural_order("first")}, p.id LIMIT %s OFFSET %s""",
+        (words, size + 1, (page - 1) * size),
+    ).fetchall()
+    return {"people": [dict(row) for row in rows[:size]], "page": page, "has_next": len(rows) > size}
 
 
 def people_overview(db, version, privacy_version=None):

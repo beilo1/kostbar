@@ -495,6 +495,72 @@ class PostgreSQLTests(unittest.TestCase):
                             "until": float("inf"), "max": float("inf")}
         return {"kk_admin": name}
 
+    def test_admin_account_pages_sort_across_pages_and_keep_global_balances(self):
+        app = server.App({}, self.config)
+        admin = self.feature_admin(app, "cashier", False)
+        with self.connect() as db:
+            db.execute("""INSERT INTO people (card,first,last,department,created)
+                          SELECT 'test-card-' || n, 'Anna', 'Ährens', 'R ' || n, %s
+                          FROM generate_series(1, 120) n""", (store.now(),))
+            person = db.execute("SELECT id FROM people WHERE department='R 2'").fetchone()["id"]
+            store.accept_policies(db, person, app.version, app.privacy["version"], "a")
+            db.execute("INSERT INTO carried_balances (person,cents) VALUES (%s,-700)", (person,))
+            store.entry(db, person, "payment", 200)
+            db.execute("""UPDATE people SET active=0,closed_at=%s WHERE department='R 3'""", (store.now(),))
+            credit = db.execute("SELECT id FROM people WHERE department='R 120'").fetchone()["id"]
+            store.entry(db, credit, "payment", 900)
+
+        def read(endpoint, **query):
+            return app.route(None, "GET", "/api/admin/" + endpoint,
+                             {key: [str(value)] for key, value in query.items()}, {}, admin)[0]
+
+        self.assertEqual(read("summary"), {"outstanding": 500, "credit": 900, "active": 119})
+        self.assertNotIn("people", read("sites"))
+        self.assertNotIn("people", read("products"))
+        first = read("people", sort="department", search="ANNA ährens")
+        second = read("people", sort="department", page=2)
+        final = read("people", sort="department", page=3)
+        self.assertEqual([len(result["people"]) for result in (first, second, final)], [50, 50, 20])
+        self.assertEqual([row["department"] for result in (first, second, final) for row in result["people"]],
+                         [f"R {number}" for number in range(1, 121)])
+        self.assertTrue(first["has_next"])
+        self.assertFalse(final["has_next"])
+        self.assertTrue(first["people"][1]["terms_current"])
+        self.assertNotIn("consents", first["people"][1])
+        self.assertNotIn("card", first["people"][1])
+        self.assertEqual(read("people", sort="balance")["people"][0]["balance"], -500)
+        self.assertEqual(read("people", sort="balance", direction="descending")["people"][0]["balance"], 900)
+        self.assertEqual(read("people", search="%")["people"], [])
+        with ZipFile(BytesIO(read("export-balances").content)) as workbook:
+            self.assertIn("R 120", workbook.read("xl/sharedStrings.xml").decode())
+        options = read("account-options", search="ährens r 120")
+        self.assertEqual(options["people"], [{"id": credit, "first": "Anna", "last": "Ährens", "department": "R 120"}])
+        self.assertEqual(len(read("account-options", page=2)["people"]), 50)
+        with self.assertRaises(store.Problem) as invalid:
+            read("people", sort="created")
+        self.assertEqual(invalid.exception.status, 400)
+
+    def test_admin_journal_hides_reversal_rows_by_default(self):
+        app = server.App({}, self.config)
+        admin = self.feature_admin(app, "cashier", False)
+        with self.connect() as db:
+            person = self.person(db)
+            purchase = store.entry(db, person, "purchase", -150, terminal="a")
+            reversal = store.entry(db, person, "reversal", 150, reverses=purchase, terminal="a")
+
+        def journal(query):
+            return app.route(None, "GET", "/api/admin/journal", query, {}, admin)[0]["entries"]
+
+        hidden = journal({})
+        self.assertEqual([(entry["id"], entry["reversed_by"]) for entry in hidden], [(purchase, reversal)])
+        self.assertEqual([entry["id"] for entry in journal({"reversals": ["1"]})], [reversal, purchase])
+        self.assertEqual([entry["id"] for entry in journal({"reversals": ["0"]})], [purchase])
+        export, _ = app.route(None, "GET", "/api/admin/export-account", {"person": [str(person)]}, {}, admin)
+        with ZipFile(BytesIO(export.content)) as workbook:
+            self.assertIn("Storno", workbook.read("xl/sharedStrings.xml").decode())
+        with self.connect() as db:
+            self.assertEqual(store.balance(db, person), 0)
+
     def test_closing_an_account_ends_kiosk_session_only_after_commit(self):
         app = server.App({}, self.config)
         admin = self.feature_admin(app, "cashier", False)

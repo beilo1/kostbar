@@ -48,6 +48,19 @@ class JournalReadTests(unittest.TestCase):
         self.statements.append(query)
         return self.db.execute(query.replace("%s", "?"), params)
 
+    def test_reversals_are_filtered_before_the_cursor_page_is_selected(self):
+        self.db.execute(
+            """INSERT INTO journal VALUES
+               (53, 1, 'payment', 100, '2026-11-08T12:00:00+00:00', NULL, 'a', NULL, NULL, 0)"""
+        )
+        first = store.list_journal(self, 1, 2**63 - 1, "a", include_reversals=False)
+        self.assertEqual([entry["id"] for entry in first["entries"]], [53, *range(50, 1, -1)])
+        self.assertEqual(first["next"], 2)
+        second = store.list_journal(self, 1, first["next"], "a", include_reversals=False)
+        purchase, = second["entries"]
+        self.assertEqual((purchase["id"], purchase["reversed_by"]), (1, 51))
+        self.assertIsNone(second["next"])
+
     def test_admin_page_batches_items_and_keeps_filters_and_cursor(self):
         first = store.list_journal(self, 1, 2**63 - 1, "a")
         self.assertEqual(len(self.statements), 2)

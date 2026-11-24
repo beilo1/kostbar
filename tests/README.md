@@ -65,6 +65,8 @@ Die lokalen SQL-Tests prüfen den Sammelabruf mit 51 Einträgen für eine Person
 
 Die PostgreSQL-Suite erweitert den Stornotest um den tatsächlichen Ablauf der ursprünglichen Kaufdetails nach 90 Tagen. Solange der jüngere Storno vorliegt, sind Betrag und Grund sichtbar. Die Tests prüfen außerdem den Saldo und den historischen Artikelnamen in der Monatsstatistik.
 
+Die Tests prüfen auch den Storno-Filter vor der Kassenbuch-Paginierung. Die PostgreSQL-Suite kontrolliert die globale Suche und Sortierung der Benutzerliste über mehrere Seiten, die Kontoauswahl und Kennzahlen über alle Konten. Der Frontend-Test prüft, welche Abrufe die jeweilige Ansicht auslöst und wie verspätete Suchantworten behandelt werden.
+
 ## Datenbereinigung und Parallelbetrieb in v32
 
 Der lokale HTTP-Test hält den Hintergrundlauf an und prüft die Antwort von `/healthz`. Ein zweiter Test prüft die Wiederholung nach einem Fehler sowie den Status nach der Erholung. Der Frontend-Test deckt die Anzeige unter **Technik** ab.

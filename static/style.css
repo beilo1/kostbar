@@ -443,6 +443,10 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .journal-filters .filter { width: min(190px, 100%); }
 .journal-filters.filter-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(390px, 100%); align-items: end; }
 .journal-filters.filter-pair .filter { width: 100%; min-width: 0; }
+.journal-account-list { display: grid; gap: 6px; margin-top: 10px; }
+.journal-account-list button { justify-content: space-between; gap: 12px; text-align: left; }
+.journal-account-list small { flex-shrink: 0; }
+#journal-account-button { white-space: normal; text-align: left; }
 .paypal-settings {
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;
   margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
