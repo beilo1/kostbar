@@ -16,8 +16,8 @@ Nur der Super-Admin kann **Dauerhaft ausblenden** verwenden. Die Aktion entfernt
 2. Super-Admin-Anmeldung testen und benötigte reguläre Admins anlegen. Sortiment und Standortzuordnung prüfen; Startprodukte werden den bei der Ersteinrichtung vorhandenen Verkaufspunkten zugeordnet.
 3. An jedem eingerichteten Pi das produktive WPA-Enterprise-Profil, die erfolgreiche RADIUS-Anmeldung und den HTTPS-Healthcheck aus dem produktiven WLAN prüfen. Anschließend die Terminals koppeln und Kartenanmeldung, manuelle Anmeldung und Registrierung am Touchscreen testen.
 4. Testkauf, Barzahlung und gegebenenfalls PayPal-Meldung mit Admin-Bestätigung prüfen. Saldo und Kassenbuch abgleichen.
-5. Ein Testprodukt kaufen, umbenennen und erneut kaufen: In der Monatsauswertung bleiben beide Namen erhalten. Den alten Kauf stornieren und prüfen, dass das Storno unter dessen damaligem Namen erscheint.
-6. Jeden eingerichteten Pi neu starten und die automatische RADIUS-Anmeldung per PEAP/MSCHAPv2, die Browseröffnung und den ausgeblendeten Mauszeiger schon vor der ersten Berührung prüfen. Rotation, Tastaturlayout, Start ohne Keyring-Dialog, Kopplung, 15 Sekunden Inaktivität und fünf Sekunden Kaufanzeige prüfen.
+5. Ein Testprodukt kaufen, umbenennen und erneut kaufen. In der Monatsauswertung bleiben beide Namen erhalten. Den alten Kauf stornieren und im Kassenbuch **Stornos anzeigen** aktivieren. Das Storno muss mit dem damaligen Produktnamen erscheinen.
+6. Jeden eingerichteten Pi neu starten und die [Abnahme am Display](TERMINALS.md#6-am-echten-display-abnehmen) durchführen. Autologin in der KoSTbar-Sitzung, Kopplung und den separaten SSH-Wartungszugang prüfen.
 7. Nutzungshinweise und Datenschutz vervollständigen, Aushänge exportieren, Sicherung anlegen und Wiederherstellung in einer getrennten Testinstallation üben.
 
 ## Sammelkarte für Heißgetränke

@@ -1,0 +1,16 @@
+<labwc_config>
+  <keyboard>
+    <!-- An explicit binding keeps labwc from loading its stock shortcuts. -->
+    <keybind key="F24">
+      <action name="Focus"/>
+    </keybind>
+  </keyboard>
+  <mouse>
+    <!-- Keep window focus without the stock desktop menu bindings. -->
+    <context name="Frame">
+      <mousebind button="Left" action="Press">
+        <action name="Focus"/>
+      </mousebind>
+    </context>
+  </mouse>
+</labwc_config>

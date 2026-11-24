@@ -20,7 +20,7 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 ![Geöffnete digitale Sammelkarte von Max mit sieben von zehn Stempeln](docs/images/sammelkarte.png)
 
-Die Screenshots zeigen ausschließlich fiktive Beispieldaten.
+Die Screenshots zeigen fiktive Beispieldaten aus v38.0.1. In der aktuellen Verwaltung werden Benutzerlisten seitenweise geladen und Stornos im Kassenbuch standardmäßig ausgeblendet.
 
 ## Hardware
 
@@ -62,27 +62,27 @@ Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** 
 
 ### App-Image bereitstellen
 
-Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:40.0.2`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
+Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:40.1.0-rc.1`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
 
 ```bash
-docker build --pull -t kostbar-app:40.0.2 .
-docker image save -o kostbar-app-40.0.2.tar kostbar-app:40.0.2
+docker build --pull -t kostbar-app:40.1.0-rc.1 .
+docker image save -o kostbar-app-40.1.0-rc.1.tar kostbar-app:40.1.0-rc.1
 ```
 
 Die Tar-Datei je Zielsystem einmal importieren. Für die Erstinstallation müssen auch `postgres:17-bookworm` und `caddy:2-alpine` lokal geladen oder erreichbar sein.
 
 ```bash
-sudo docker image load -i kostbar-app-40.0.2.tar
-sudo docker image inspect kostbar-app:40.0.2 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+sudo docker image load -i kostbar-app-40.1.0-rc.1.tar
+sudo docker image inspect kostbar-app:40.1.0-rc.1 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
 ```
 
 Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jeweiligen `.env` setzen und im NAS-Unterordner `sudo docker compose -p kostbar pull app` ausführen. Eine Referenz mit Digest legt den Build eindeutig fest.
 
 ### Upgrade einer bestehenden Installation
 
-Für eine laufende v39- oder v40-Instanz genügt es, auf das App-Image 40.0.2 zu wechseln. Die Schritte für QNAP und Synology sowie den Rückweg beschreibt [Update auf v40](docs/UPDATE-v40.md).
+Für eine laufende v39- oder v40-Instanz verwendet der Release-Kandidat die vorhandene Datenbank und Konfiguration. Das NAS-Image und der Pi-Installer werden separat aktualisiert. Vorgehen, Abnahme und Rückweg stehen in [Update auf v40.1](docs/UPDATE-v40.1.md).
 
-Falls auf einem Terminal noch ein Pi-Installer vor v38.2 läuft, siehe [Terminal-Aktualisierung aus v38.2](docs/UPDATE-v38.2.md#3-bestehenden-raspberry-pi-aktualisieren). Beim Upgrade von v35 ergänzt die Anwendung weiterhin die Datenbankversionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
+Beim Upgrade von v35 ergänzt die Anwendung weiterhin die Datenbankversionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
 
 ## Entwicklung und Lizenz
 

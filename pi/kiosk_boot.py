@@ -1,17 +1,23 @@
-"""Prepare labwc autostart and LightDM autologin on a Raspberry Pi desktop."""
+"""Generate the dedicated Wayland session and configure LightDM autologin."""
 import argparse
+import json
+import math
 import os
-from pathlib import Path
 import re
 import shutil
 import struct
+from pathlib import Path
 from tempfile import NamedTemporaryFile
-from xml.dom import Node, minidom
+from urllib.parse import urlsplit
+from xml.etree import ElementTree as ET
 
 LAUNCHER = "/opt/kaffeekasse-terminal/start-kiosk.sh"
 MANAGED = re.compile(rf"\s*(?:KIOSK_SCALE=([0-9.]+)\s+)?{re.escape(LAUNCHER)}\s*&\s*")
 SEATS = {"[Seat:*]", "[Seat:seat0]"}
 CURSOR_THEME = "KoSTbar-Transparent"
+SCALE = re.compile(r"(?:0\.[5-9]|[12](?:\.[0-9])?|3(?:\.0)?)")
+ORIGIN = re.compile(r"https://([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?")
+SOURCE = Path(__file__).resolve().parent
 
 
 def hide_cursor(home):
@@ -31,73 +37,72 @@ def hide_cursor(home):
     for name in sorted(names):
         (cursors / name).write_bytes(header + entry + image)
 
-    target = home / ".config/labwc/environment"
-    default = Path("/etc/xdg/labwc/environment")
-    source = target if target.is_file() else default
-    current = source.read_text(encoding="utf-8") if source.is_file() else ""
-    setting = f"XCURSOR_THEME={CURSOR_THEME}"
-    lines = [line for line in current.splitlines() if line.strip() != setting]
-    desired = "\n".join([*lines, setting]) + "\n"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if source != target or current != desired:
-        target.write_text(desired, encoding="utf-8")
 
-
-def enable_touch(home):
-    target = home / ".config/labwc/rc.xml"
-    default = Path("/etc/xdg/labwc/rc.xml")
-    source = target if target.is_file() else default
-    document = minidom.parse(str(source)) if source.is_file() else minidom.parseString("<labwc_config/>")
-    root = document.documentElement
-    devices = [child for child in root.childNodes
-               if child.nodeType == Node.ELEMENT_NODE and child.localName == "touch"]
-    if not devices:
-        devices = [root.appendChild(document.createElement("touch"))]
-
-    changed = not target.is_file()
-    for device in devices:
-        options = [child for child in device.childNodes
-                   if child.nodeType == Node.ELEMENT_NODE and child.localName == "mouseEmulation"]
-        for option in options:
-            if option.firstChild and option.firstChild.nodeValue == "no":
-                continue
-            while option.firstChild:
-                option.removeChild(option.firstChild)
-            option.appendChild(document.createTextNode("no"))
-            changed = True
-        if (device.hasAttribute("mouseEmulation") or not options) and device.getAttribute("mouseEmulation") != "no":
-            device.setAttribute("mouseEmulation", "no")
-            changed = True
-
-    if changed:
-        backup = target.with_name("rc.xml.pre-kostbar-touch")
-        if target.is_file() and not backup.exists():
-            shutil.copy2(target, backup)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=target.parent, delete=False) as temp:
-            temp_path = Path(temp.name)
-            temp.write(document.toxml(encoding="UTF-8") + b"\n")
+def kiosk_rc(home):
+    config = ET.parse(SOURCE / "kiosk-rc.xml").getroot()
+    legacy = home / ".config/labwc/rc.xml"
+    if not legacy.is_file():
+        legacy = Path("/etc/xdg/labwc/rc.xml")
+    previous = ET.parse(legacy).getroot() if legacy.is_file() else ET.Element("labwc_config")
+    touch_devices = previous.findall("{*}touch")
+    for device in touch_devices:
+        # Carry over display mappings only. The desktop configuration stays unused.
+        attributes = {"mouseEmulation": "no"}
+        for name in ("deviceName", "mapToOutput"):
+            value = device.get(name) or device.findtext(f"{{*}}{name}")
+            if value:
+                attributes[name] = value.strip()
+        ET.SubElement(config, "touch", attributes)
+    if not touch_devices:
+        ET.SubElement(config, "touch", mouseEmulation="no")
+    calibrations = ET.Element("libinput")
+    for device in previous.findall("{*}libinput/{*}device"):
+        matrix = (device.get("calibrationMatrix") or device.findtext("{*}calibrationMatrix", "")).split()
         try:
-            temp_path.replace(target)
-        finally:
-            temp_path.unlink(missing_ok=True)
+            valid = len(matrix) == 6 and all(math.isfinite(float(value)) for value in matrix)
+        except ValueError:
+            valid = False
+        if valid:
+            category = device.get("category") or device.findtext("{*}category", "") or "default"
+            target = ET.SubElement(calibrations, "device", category=category)
+            ET.SubElement(target, "calibrationMatrix").text = " ".join(matrix)
+    if len(calibrations):
+        config.append(calibrations)
+    ET.indent(config)
+    return ET.tostring(config, encoding="unicode")
 
 
-def autostart(home, scale):
-    target = home / ".config/labwc/autostart"
-    default = Path("/etc/xdg/labwc/autostart")
-    source = target if target.is_file() else default
-    lines = source.read_text().splitlines() if source.is_file() else []
-    managed = [match for line in lines if (match := MANAGED.fullmatch(line))]
-    scale = scale or next((match[1] for match in managed if match[1]), "")
-    if scale and not re.fullmatch(r"(?:0\.[5-9]|[12](?:\.[0-9])?|3(?:\.0)?)", scale):
+def saved_scale(path):
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = MANAGED.fullmatch(line)
+            if match and match[1] and SCALE.fullmatch(match[1]):
+                return match[1]
+    return ""
+
+
+def autostart(scale):
+    if scale and not SCALE.fullmatch(scale):
         raise SystemExit("KIOSK_SCALE muss zwischen 0.5 und 3.0 liegen, mit höchstens einer Nachkommastelle.")
     prefix = f"KIOSK_SCALE={scale} " if scale else ""
-    kept = [line for line in lines if not MANAGED.fullmatch(line)]
-    desired = "\n".join(kept + [f"{prefix}{LAUNCHER} &"]) + "\n"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if not target.is_file() or target.read_text() != desired:
-        target.write_text(desired)
+    return f"{prefix}{LAUNCHER} &"
+
+
+def chromium_policy(origin):
+    if not isinstance(origin, str) or not ORIGIN.fullmatch(origin):
+        raise SystemExit("Das Geräteprofil benötigt eine HTTPS-Adresse ohne Pfad.")
+    address = urlsplit(origin)
+    try:
+        host, port = address.hostname, address.port or 443
+    except ValueError as exc:
+        raise SystemExit("Ungültiger HTTPS-Port im Geräteprofil.") from exc
+    if ".." in host:
+        raise SystemExit("Ungültiger Hostname im Geräteprofil.")
+    terminal = f"https://.{host}:{port}"
+    policy = json.loads((SOURCE / "chromium-policy.json").read_text(encoding="utf-8"))
+    policy["URLBlocklist"] += [f"{terminal}/admin", f"{terminal}/api/admin"]
+    policy["URLAllowlist"].insert(0, terminal)
+    return policy
 
 
 def update_seats(text, user, session):
@@ -131,6 +136,9 @@ def lightdm(user, session):
     backup = conf.with_name(conf.name + ".pre-kaffeekasse")
     if not backup.exists():
         shutil.copy2(conf, backup)
+    previous = conf.with_name(conf.name + ".pre-kostbar-kiosk-session")
+    if not previous.exists():
+        shutil.copy2(conf, previous)
     permissions = conf.stat()
     with NamedTemporaryFile(mode="w", encoding="utf-8", dir=conf.parent, delete=False) as temp:
         target = Path(temp.name)
@@ -147,17 +155,26 @@ def lightdm(user, session):
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="action", required=True)
-    start = sub.add_parser("autostart")
-    start.add_argument("home", type=Path)
-    start.add_argument("scale", nargs="?", default="")
+    for action in ("cursor", "rc"):
+        sub.add_parser(action).add_argument("home", type=Path)
+    sub.add_parser("saved-scale").add_argument("autostart", type=Path)
+    sub.add_parser("autostart").add_argument("scale")
+    sub.add_parser("policy").add_argument("profile", type=Path)
     login = sub.add_parser("lightdm")
     login.add_argument("user")
     login.add_argument("session")
     args = parser.parse_args()
-    if args.action == "autostart":
-        autostart(args.home, args.scale)
+    if args.action == "cursor":
         hide_cursor(args.home)
-        enable_touch(args.home)
+    elif args.action == "rc":
+        print(kiosk_rc(args.home))
+    elif args.action == "saved-scale":
+        print(saved_scale(args.autostart))
+    elif args.action == "autostart":
+        print(autostart(args.scale))
+    elif args.action == "policy":
+        profile = json.loads(args.profile.read_text(encoding="utf-8"))
+        print(json.dumps(chromium_policy(profile["origin"]), indent=2))
     else:
         lightdm(args.user, args.session)
 

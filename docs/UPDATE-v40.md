@@ -1,5 +1,7 @@
 # Laufende KoSTbar-Instanz auf v40.0.2 aktualisieren
 
+Diese Anleitung beschreibt den historischen Stand v40.0.2. Für den aktuellen Release-Kandidaten siehe [Update auf v40.1](UPDATE-v40.1.md).
+
 Beim Wechsel von v39 oder einer älteren v40-Version auf v40.0.2 genügt der Austausch des App-Containers. Die bestehende Geräte-Kopplung und die Datenbank werden weiterverwendet. Die Schritte gelten für QNAP und Synology.
 
 ## 1. Neues Image bauen

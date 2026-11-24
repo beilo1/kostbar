@@ -115,7 +115,7 @@ Wenn die Containerliste leer ist und der Tag auch für kein geplantes Deployment
 sudo docker image rm kostbar-app:35.0.0
 ```
 
-Wenn eine Image-ID mehrere Tags hat, prüfe jeden Tag separat. Ein ungetaggtes Image (`<none>`) erst entfernen, wenn seine Herkunft und fehlende Nutzung belegt sind. Für `postgres:17-bookworm` und `caddy:2-alpine` gilt dieselbe Verbraucherprüfung, falls du die Tags ebenfalls entfernen willst. v40 braucht beide Basis-Images für den nächsten Start. `kostbar-app:40.0.2` ist das App-Image für den Neuaufbau. [Docker-Referenz zu image rm](https://docs.docker.com/reference/cli/docker/image/rm/)
+Wenn eine Image-ID mehrere Tags hat, prüfe jeden Tag separat. Ein ungetaggtes Image (`<none>`) erst entfernen, wenn seine Herkunft und fehlende Nutzung belegt sind. Für `postgres:17-bookworm` und `caddy:2-alpine` gilt dieselbe Verbraucherprüfung, falls du die Tags ebenfalls entfernen willst. Für eine Neuinstallation werden beide Basis-Images benötigt. Das aktuelle App-Image steht in der [Anleitung zum Image-Build](../README.md#app-image-bereitstellen). [Docker-Referenz zu image rm](https://docs.docker.com/reference/cli/docker/image/rm/)
 
 ## 4. Alte Dateien und NAS-Einstellungen bereinigen
 
@@ -136,4 +136,4 @@ sudo docker network ls --filter "label=com.docker.compose.project=$old_project" 
 
 Alle drei Abfragen sollten erfolgreich und ohne Treffer enden. Prüfe zusätzlich die zuvor identifizierten Ressourcen ohne Projektlabel, die alten App-Image-Tags und die Installationsordner. Im Synology-Beispiel sind das insbesondere `kostbar_pgdata`, `kostbar_caddy_data`, `kostbar_caddy_config` sowie `kostbar_backend`, `kostbar_database` und `kostbar_lan`.
 
-Entpacke danach v40 in einen neuen, leeren Ordner, etwa `/volume1/docker/kostbar-v40`. Verwende diesen Pfad in der [Synology-Neuinstallation](../Synology/README.md#1-konfiguration-erzeugen) bzw. [QNAP-Neuinstallation](../QNAP/README.md). Du kannst das Compose-Projekt wieder `kostbar` nennen, sobald seine früheren Ressourcen entfernt sind. Erzeuge die Konfiguration frisch, stelle `kostbar-app:40.0.2` bereit und starte v40. PostgreSQL initialisiert ein neues Datenvolume. Prüfe `schema-status` und `/healthz` und richte den Super-Admin und die Terminalkopplungen mit den neu erzeugten Geräteprofilen ein.
+Lege den aktuellen Quellstand in einem neuen, leeren Ordner ab, etwa `/volume1/docker/kostbar-neu`. Verwende diesen Pfad in der [Synology-Neuinstallation](../Synology/README.md#1-konfiguration-erzeugen) bzw. [QNAP-Neuinstallation](../QNAP/README.md). Du kannst das Compose-Projekt wieder `kostbar` nennen, sobald seine früheren Ressourcen entfernt sind. Erzeuge die Konfiguration frisch, stelle das aktuelle App-Image bereit und starte die neue Installation. PostgreSQL initialisiert ein neues Datenvolume. Prüfe `schema-status` und `/healthz` und richte den Super-Admin und die Terminalkopplungen mit den neu erzeugten Geräteprofilen ein.

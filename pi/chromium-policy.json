@@ -1,3 +1,14 @@
 {
-  "PasswordManagerEnabled": false
+  "AllowFileSelectionDialogs": false,
+  "BrowserAddPersonEnabled": false,
+  "BrowserGuestModeEnabled": false,
+  "DeveloperToolsAvailability": 2,
+  "DownloadRestrictions": 3,
+  "ExtensionInstallBlocklist": ["*"],
+  "IncognitoModeAvailability": 1,
+  "PasswordManagerEnabled": false,
+  "PrintingEnabled": false,
+  "RemoteDebuggingAllowed": false,
+  "URLBlocklist": ["*", "file://*", "chrome://*"],
+  "URLAllowlist": ["https://.github.com:443/beilo1/kostbar"]
 }

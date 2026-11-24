@@ -4,7 +4,7 @@ Die gemeinsamen Installationsdateien liegen im Hauptordner unter `pi/`. Der Konf
 
 ## 1. Raspberry Pi OS vorbereiten
 
-Raspberry Pi OS 64-Bit mit Desktop, labwc/Wayland und LightDM verwenden. Im Raspberry Pi Imager das Wartungskonto, SSH, das WLAN-Land und das vorläufige WPA2-/WPA3-Personal-WLAN (PSK) einrichten. Den SSH-Zugang prüfen. Für den Dauerkiosk Screen Blanking deaktivieren. Über das Setup-WLAN alle benötigten Pakete installieren, einschließlich USBGuard für Schritt 5. Danach startet die Umstellung auf das produktive WLAN.
+Raspberry Pi OS 64-Bit mit Desktop, labwc/Wayland und LightDM verwenden. Im Raspberry Pi Imager das Wartungskonto, SSH, das WLAN-Land und das vorläufige WPA2-/WPA3-Personal-WLAN (PSK) einrichten. Den SSH-Zugang mit dem separaten Wartungskonto prüfen. Für den Dauerkiosk Screen Blanking deaktivieren. Über das Setup-WLAN alle benötigten Pakete installieren, einschließlich USBGuard für Schritt 5. Danach startet die Umstellung auf das produktive WLAN.
 
 ```bash
 sudo apt update
@@ -96,7 +96,7 @@ method=auto
 method=auto
 ```
 
-Für die automatische Anmeldung speichert NetworkManager das Passwort in der systemweiten, nur für root lesbaren Profildatei. Gib es direkt im Editor ein. Im Keyfile einen wörtlichen Backslash als `\\` und führende Leerzeichen als `\s` schreiben. Die Profildatei enthält Zugangsdaten und gehört in eine geschützte Sicherung.
+Für die automatische Anmeldung speichert NetworkManager das Passwort in der systemweiten, nur für root lesbaren Profildatei. Gib es direkt im Editor ein. Im Keyfile einen wörtlichen Backslash als `\` und führende Leerzeichen als `\s` schreiben. Die Profildatei enthält Zugangsdaten und gehört in eine geschützte Sicherung.
 
 ### Verbindung und automatischen Start prüfen
 
@@ -216,7 +216,9 @@ sudo reboot
 
 ### Grafischen Kiosk starten
 
-`pi/install.sh` richtet auf jedem Pi automatisch den unprivilegierten Desktopbenutzer `kiosk`, das LightDM-Autologin, den Boot in die grafische Oberfläche und den Chromium-Autostart in labwc ein. Ein transparentes Cursor-Theme blendet den Mauszeiger ab dem Start der grafischen Kiosk-Sitzung aus. labwc gibt native Touch-Ereignisse an Chromium weiter, damit die Anmeldung und das Scrollen mit dem Finger funktionieren. Der Kartenleser startet als Systemdienst. Nach der Installation neu starten:
+`pi/install.sh` richtet LightDM für die separate Sitzung `kostbar-kiosk` ein. Sie startet labwc mit einer root-eigenen Konfiguration unter `/etc/kaffeekasse-kiosk/labwc/` und öffnet Chromium nativ unter Wayland. Die Sitzung lädt weder Pi-Panel noch Anwendungsmenü oder normale Desktop-Tastenkürzel. Das Konto `kiosk` hat ein gesperrtes Passwort. Zulässig sind die eigene Gruppe und gegebenenfalls `autologin`. Beim Upgrade entfernt der Installer eine vorhandene Mitgliedschaft in Debians allgemeiner Gruppe `users`. Er prüft auch explizite sudo-Rechte. Polkit verweigert diesem Konto privilegierte Aktionen. Der Kartenleser läuft als Systemdienst unter `kaffeekasse` und liest seine Konfiguration aus einem eigenen Verzeichnis. Für die Wartung bleibt das getrennte SSH-Konto vorgesehen.
+
+Ein transparentes Cursor-Theme blendet den Mauszeiger aus. labwc gibt native Touch-Ereignisse direkt an Chromium weiter. Nach der Installation den Pi neu starten.
 
 ```bash
 sudo reboot
@@ -250,17 +252,16 @@ Bei einem Neustart bleibt die Kopplung erhalten. Im laufenden Betrieb verlänger
 
 ### Autostart prüfen
 
-Mit `sudo lightdm --show-config` lässt sich der wirksame Desktop-Autologin prüfen. Die ursprüngliche LightDM-Konfiguration wird einmal unter `/etc/lightdm/lightdm.conf.pre-kaffeekasse` gesichert. Die Skalierung aus dem Installationsaufruf bleibt im Kiosk-Autostart hinterlegt. Für das 10,1-Zoll-Display im Querformat ist `KIOSK_SCALE=1.5` der Ausgangswert. Bei Bedarf den Wert beim erneuten Aufruf von `pi/install.sh` anpassen. [Offizielle Kioskanleitung](https://www.raspberrypi.com/tutorials/how-to-use-a-raspberry-pi-in-kiosk-mode/)
+Mit `sudo lightdm --show-config` den wirksamen Autologin `kiosk` und `autologin-session=kostbar-kiosk` prüfen. Die Skalierung steht in `/etc/kaffeekasse-kiosk/labwc/autostart`. Der Installer übernimmt beim Upgrade einen vorhandenen Skalierungswert sowie Touch-Zuordnungen und Kalibrierungsmatrizen aus der bisherigen labwc-Konfiguration. Für das Referenzdisplay ist `KIOSK_SCALE=1.5` der Ausgangswert. Bei Bedarf den Wert beim erneuten Aufruf von `pi/install.sh` setzen. [labwc-Konfiguration](https://labwc.github.io/labwc-config.5.html)
 
 ### Displaydrehung und Chromium
 
 Der Launcher läuft bei jedem Start der grafischen Sitzung des Kiosk-Kontos. Er setzt `wlr-randr --output DSI-2 --transform 270` vor der ersten Verbindungsprüfung zum NAS. So wird die Drehung auch nach einem Neustart erneut angewendet. Bei einem abweichenden Anschlussnamen zeigt `wlr-randr` in der laufenden labwc-Sitzung den tatsächlichen Ausgang. Den Namen bei Bedarf in `pi/start-kiosk.sh` anpassen. Kann die Drehung nicht angewendet werden, läuft der Kioskstart weiter.
 
-Chromium verwendet mit `--password-store=basic` den einfachen Passwortspeicher für das KoSTbar-Kiosk-Profil. Damit entfällt der Keyring-Dialog beim Start. Die Pflicht-Richtlinie `PasswordManagerEnabled=false` in `/etc/chromium/policies/managed/90-kostbar-kiosk.json` unterbindet die Passwort-Speicherabfrage für Chromium auf dem Terminal-Pi.
-
+Die Pflicht-Richtlinien in `/etc/chromium/policies/managed/90-kostbar-kiosk.json` gelten für Chromium auf dem gesamten Terminal-Pi. Sie erlauben die KoSTbar-Adresse aus dem Geräteprofil und den Projektpfad auf GitHub. Die Verwaltungsoberfläche und die Admin-API werden als Navigationsziele gesperrt. Datei-Auswahldialoge, Downloads, Drucken, Entwicklerwerkzeuge, Remote-Debugging und Erweiterungsinstallationen sind deaktiviert. Die Lizenz bleibt lokal in KoSTbar lesbar. Zahlungen per PayPal-QR werden auf einem separaten Gerät geöffnet. Die GitHub-Seite benötigt Internetzugang auf dem Pi. Chromium startet mit dem bestehenden persistenten Kiosk-Profil, damit die Gerätezuordnung erhalten bleibt. [Chromium-URL-Filter](https://www.chromium.org/administrators/url-blocklist-filter-format/)
 
 Bei einer Neuinstallation mit leerer Datenbank jeden Pi mit dem neuen Geräteprofil und gegebenenfalls der neuen CA einrichten und neu koppeln. Bei einem Upgrade mit übernommener Datenbank und Konfiguration können die bestehenden Profile und Kopplungen weiterverwendet werden. Falls der Pi bei einer Neuinstallation keine Kopplung anbietet, Geräteprofil, NAS-Ziel, Dienststatus und gegebenenfalls eine bereits hinterlegte Zuordnung unter **Verkaufspunkte** prüfen.
 
 ## 6. Am echten Display abnehmen
 
-Nach einem vollständigen Neustart die automatische WLAN-Anmeldung per PEAP/MSCHAPv2 und den HTTPS-Zugriff über das Terminal-VLAN prüfen. Vor der ersten Berührung kontrollieren, dass bereits beim Sitzungsstart kein Mauszeiger sichtbar ist. Danach die Orientierung und den Touch an allen Ecken prüfen. In Nutzungsbedingungen, Datenschutzerklärung, Produktliste und Warenkorb mit einem Finger wischen. Im PayPal-Dialog Betrag, Tastatur, QR-Code und Schaltfläche auf gleichzeitige Sichtbarkeit prüfen. Registrierung mit Vorname, Nachname, Referat einschließlich Ziffern sowie Zustimmungsfeld öffnen. Tastatur, Formular und Bestätigung müssen bei der gewählten Skalierung passen. Manuelle Anmeldung mit Groß- und Kleinbuchstaben testen. Nach 15 Sekunden ohne Eingabe muss die Sitzung enden; nach einem erfolgreichen Kauf beträgt die Anzeigezeit fünf Sekunden. Kartenleser nach Abziehen und erneutem Anstecken am freigegebenen Port prüfen. Danach die Schritte an jedem weiteren Pi wiederholen.
+Nach einem vollständigen Neustart die automatische WLAN-Anmeldung per PEAP/MSCHAPv2 und den HTTPS-Zugriff über das Terminal-VLAN prüfen. Vor der ersten Berührung kontrollieren, dass bereits beim Sitzungsstart kein Mauszeiger sichtbar ist. Danach die Orientierung und den Touch an allen Ecken prüfen. In Nutzungsbedingungen, Datenschutzerklärung, Produktliste und Warenkorb mit einem Finger wischen. Im PayPal-Dialog Betrag, Tastatur, QR-Code und Schaltfläche auf gleichzeitige Sichtbarkeit prüfen. Registrierung mit Vorname, Nachname, Referat einschließlich Ziffern sowie Zustimmungsfeld öffnen. Tastatur, Formular und Bestätigung müssen bei der gewählten Skalierung passen. Manuelle Anmeldung mit Groß- und Kleinbuchstaben testen. Nach 15 Sekunden ohne Eingabe muss die Sitzung enden; nach einem erfolgreichen Kauf beträgt die Anzeigezeit fünf Sekunden. Kartenleser nach Abziehen und erneutem Anstecken am freigegebenen Port prüfen. Prüfe außerdem am Startbildschirm und in Nutzungsbedingungen sowie Projektdialog, dass keine Desktop-Oberfläche, Datei-Auswahl oder Entwicklerwerkzeuge erreichbar sind. Prüfe den lokalen Lizenztext und bei freigegebenem Internetzugang den Projektlink. Kontrolliere vom Wartungsrechner den SSH-Zugang und die Verwaltung. Danach die Schritte an jedem weiteren Pi wiederholen.

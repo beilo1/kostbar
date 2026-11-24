@@ -4,7 +4,7 @@ import {table as renderTable} from './ui-table.js';
 const purpose = {
   chromium: 'Kiosk-Browser', python3: 'Laufzeit des Leserdiensts', 'python3-pyscard': 'PC/SC-Anbindung in Python',
   pcscd: 'PC/SC-Systemdienst', libccid: 'Treiber für USB-Kartenleser', 'pcsc-tools': 'Leserdiagnose',
-  lightdm: 'Automatische Desktop-Anmeldung', labwc: 'Wayland-Desktop mit ausgeblendetem Mauszeiger', curl: 'HTTPS-Verbindungsprüfung',
+  lightdm: 'Automatische Anmeldung in der KoSTbar-Sitzung', labwc: 'Eigene Wayland-Kiosksitzung', curl: 'HTTPS-Verbindungsprüfung',
   'wlr-randr': 'Displaydrehung beim Kioskstart',
   usbguard: 'USB-Gerätefreigabe am Terminal',
   'network-manager': 'WLAN-Systemprofil und PEAP/MSCHAPv2-Anmeldung',
@@ -42,7 +42,7 @@ function architecture(synology) {
       ${box('KoSTbar-Backend', 'Waitress · Python')}${arrow('SQL / Psycopg')}
       ${box('PostgreSQL', 'Konten, Sortiment, Buchungen')}
     </div>
-    <p>Chromium öffnet <code>/</code>. Die Verwaltung liegt unter <code>/admin</code> und nutzt denselben HTTPS-Einstieg. ${synology ?
+    <p>Chromium öffnet <code>/</code> mit dem unprivilegierten Kioskkonto. Der PC/SC-Leserdienst hat ein eigenes Dienstkonto. Die Verwaltung unter <code>/admin</code> nutzt vom Wartungsrechner denselben HTTPS-Einstieg. ${synology ?
       'DSM terminiert TLS. Caddy nimmt intern Anfragen vom DSM Reverse Proxy an und reicht sie an das Backend weiter.' :
       'Caddy stellt das HTTPS-Zertifikat über seine interne CA aus und leitet intern an das Backend weiter.'}
       App und Datenbank haben keine eigenen veröffentlichten Host-Ports.</p>

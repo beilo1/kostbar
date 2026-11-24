@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=KoSTbar-Kiosk
+Comment=Bedienoberfläche für das KoSTbar-Terminal
+Exec=/opt/kaffeekasse-terminal/kiosk-session.sh
+TryExec=/opt/kaffeekasse-terminal/kiosk-session.sh
+Type=Application

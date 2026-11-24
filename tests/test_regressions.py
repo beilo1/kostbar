@@ -1,18 +1,19 @@
 """Fast behavioural regressions without a database or terminal hardware."""
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
 import io
 import json
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from threading import Event, RLock, Thread
+from unittest.mock import Mock, patch
+from xml.etree import ElementTree as ET
 
 import server
 import store
@@ -421,51 +422,83 @@ class InstallerPathTests(unittest.TestCase):
 
 
 class KioskDesktopTests(unittest.TestCase):
-    def test_autostart_enables_native_touch_and_preserves_output_mapping(self):
+    def boot(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "pi/kiosk_boot.py"), *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def test_kiosk_reuses_touch_mapping_and_calibration_from_desktop(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
             labwc = home / ".config/labwc"
             labwc.mkdir(parents=True)
             rc = labwc / "rc.xml"
             original = ('<openbox_config xmlns="http://openbox.org/3.4/rc">\n'
-                        '  <!-- Keep the DSI mappings -->\n'
+                        '  <keyboard><keybind key="F7"><action name="ShowMenu"/></keybind></keyboard>\n'
                         '  <touch deviceName="Touch A" mapToOutput="DSI-2" mouseEmulation="yes"/>\n'
                         '  <touch><deviceName>Touch B</deviceName><mouseEmulation>yes</mouseEmulation></touch>\n'
                         '  <libinput><device category="touch"><calibrationMatrix>1 0 0 0 1 0</calibrationMatrix>'
                         '</device></libinput>\n</openbox_config>\n')
             rc.write_text(original, encoding="utf-8")
-            command = [sys.executable, str(ROOT / "pi/kiosk_boot.py"), "autostart", folder]
-            subprocess.run(command, check=True)
-            expected = original.replace('mouseEmulation="yes"', 'mouseEmulation="no"').replace(
-                '>yes</mouseEmulation>', '>no</mouseEmulation>')
-            updated = rc.read_text(encoding="utf-8")
-            self.assertEqual(updated.split("?>", 1)[1], expected)
-            self.assertEqual(rc.with_name("rc.xml.pre-kostbar-touch").read_text(encoding="utf-8"), original)
-            subprocess.run(command, check=True)
-            self.assertEqual(rc.read_text(encoding="utf-8"), updated)
-            self.assertEqual(rc.with_name("rc.xml.pre-kostbar-touch").read_text(encoding="utf-8"), original)
+            config = ET.fromstring(self.boot("rc", folder))
+            self.assertEqual([device.attrib for device in config.findall("./touch")], [
+                {"deviceName": "Touch A", "mapToOutput": "DSI-2", "mouseEmulation": "no"},
+                {"deviceName": "Touch B", "mouseEmulation": "no"}])
+            self.assertEqual(config.findtext("./libinput/device/calibrationMatrix"), "1 0 0 0 1 0")
+            self.assertEqual([action.get("name") for action in config.findall(".//action")], ["Focus", "Focus"])
+            self.assertEqual(rc.read_text(encoding="utf-8"), original)
 
-    def test_autostart_hides_cursor_and_preserves_settings_on_reinstall(self):
+    def test_autostart_carries_only_scale_and_keeps_cursor_theme(self):
         with tempfile.TemporaryDirectory() as folder:
             home = Path(folder)
             labwc = home / ".config/labwc"
             labwc.mkdir(parents=True)
             autostart = labwc / "autostart"
-            autostart.write_text("custom-start &\n", encoding="utf-8")
+            launch = "/opt/kaffeekasse-terminal/start-kiosk.sh"
+            original = f"custom-start &\nKIOSK_SCALE=1.5 {launch} &\n"
+            autostart.write_text(original, encoding="utf-8")
             environment = labwc / "environment"
             environment.write_text("XKB_DEFAULT_LAYOUT=de\nXCURSOR_THEME=PiXflat\n", encoding="utf-8")
-            command = [sys.executable, str(ROOT / "pi/kiosk_boot.py"), "autostart", folder]
-            subprocess.run([*command, "1.5"], check=True)
-            subprocess.run(command, check=True)
-            self.assertEqual(autostart.read_text(encoding="utf-8").splitlines(),
-                             ["custom-start &", "KIOSK_SCALE=1.5 /opt/kaffeekasse-terminal/start-kiosk.sh &"])
+            scale = self.boot("saved-scale", autostart).strip()
+            self.assertEqual(self.boot("autostart", scale), f"KIOSK_SCALE=1.5 {launch} &\n")
+            self.assertEqual(self.boot("autostart", ""), f"{launch} &\n")
+            self.boot("cursor", folder)
+            self.boot("cursor", folder)
+            self.assertEqual(autostart.read_text(encoding="utf-8"), original)
             self.assertEqual(environment.read_text(encoding="utf-8").splitlines(),
-                             ["XKB_DEFAULT_LAYOUT=de", "XCURSOR_THEME=PiXflat", "XCURSOR_THEME=KoSTbar-Transparent"])
+                             ["XKB_DEFAULT_LAYOUT=de", "XCURSOR_THEME=PiXflat"])
             cursors = home / ".icons/KoSTbar-Transparent/cursors"
             data = (cursors / "default").read_bytes()
             self.assertEqual(data[:4], b"Xcur")
             self.assertEqual(data[-4:], bytes(4))
             self.assertEqual(data, (cursors / "left_ptr").read_bytes())
+
+    def test_browser_policies_allow_only_expected_navigation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            profile = Path(folder) / "device.json"
+            for authority, browser_filter in (
+                ("kostbar.internal.lan:18443", "https://.kostbar.internal.lan:18443"),
+                ("kostbar.example.org", "https://.kostbar.example.org:443"),
+                ("192.0.2.25:18443", "https://.192.0.2.25:18443"),
+            ):
+                with self.subTest(authority=authority):
+                    profile.write_text(json.dumps({"origin": f"https://{authority}"}), encoding="utf-8")
+                    policy = json.loads(self.boot("policy", profile))
+                    self.assertEqual(policy["URLAllowlist"], [browser_filter, "https://.github.com:443/beilo1/kostbar"])
+                    self.assertEqual(policy["URLBlocklist"], [
+                        "*", "file://*", "chrome://*", f"{browser_filter}/admin", f"{browser_filter}/api/admin"])
+                    self.assertFalse(policy["AllowFileSelectionDialogs"])
+                    self.assertFalse(policy["RemoteDebuggingAllowed"])
+                    self.assertEqual(policy["DownloadRestrictions"], 3)
+                    self.assertEqual(policy["DeveloperToolsAvailability"], 2)
+
+    def test_browser_policy_rejects_noncanonical_origins(self):
+        with tempfile.TemporaryDirectory() as folder:
+            profile = Path(folder) / "device.json"
+            for origin in ("http://kostbar.example.org", "https://kostbar.example.org:99999",
+                           "https://kostbar.example.org/admin", "https://*.example.org"):
+                with self.subTest(origin=origin), self.assertRaises(subprocess.CalledProcessError):
+                    profile.write_text(json.dumps({"origin": origin}), encoding="utf-8")
+                    self.boot("policy", profile)
 
 
 if __name__ == "__main__":

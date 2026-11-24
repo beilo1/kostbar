@@ -38,6 +38,8 @@
 !pi/versions.py
 !pi/install.sh
 !pi/kiosk_boot.py
+!pi/kiosk-rc.xml
+!pi/chromium-policy.json
 !static
 !static/**
 !licenses
