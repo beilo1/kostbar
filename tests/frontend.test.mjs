@@ -32,7 +32,7 @@ function timerContext(stage, seconds) {
     timeoutDialog: {open: false, showModal() {this.open = true;}, close() {this.open = false;}},
     timeoutCountdown: {}, INACTIVITY_WARNING_SECONDS: 5,
     canExtendVisit,
-    applyState(next) {calls.push(['state', next]);}, kioskPath: p => p,
+    applyState(next) {calls.push(['state', next]);},
     kioskApi(p, body) {calls.push(['api', p, body]); return Promise.resolve({remaining: 15});},
   };
   return {context, calls};

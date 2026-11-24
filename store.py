@@ -8,6 +8,8 @@ import re
 import secrets
 from zoneinfo import ZoneInfo
 
+import schema_migrations
+
 CATEGORIES = {
     "cold": "Kaltgetränke", "hot": "Heißgetränke", "snack": "Snacks", "sweet": "Süßigkeiten",
 }
@@ -42,8 +44,6 @@ CATALOG = (
     ("sweet", "Snickers", 50, "bar"),
     ("sweet", "Oreo", 50, "cookie"),
 )
-from schema_migrations import SCHEMA
-import schema_migrations
 
 
 class Problem(Exception):

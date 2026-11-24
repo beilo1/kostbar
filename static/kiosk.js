@@ -5,7 +5,7 @@ import {acceptsState, canExtendVisit, sessionViewChanged} from './kiosk-session.
 import {createTerminalPreview, PREVIEW_PAGE} from './terminal-preview.js';
 import { icon, terminalArt } from './art.js';
 import {adjustCart, shopMarkup, showBasket, showCatalog} from './shop-view.js';
-import { api, esc, euro, idempotencyKey, kioskPath, notify } from './shared.js';
+import { api, esc, euro, idempotencyKey, notify } from './shared.js';
 import { renderPrivacy, renderTerms } from './terms.js';
 
 const screen = document.getElementById('screen');
@@ -36,7 +36,6 @@ let expiredVisit;
 let resuming = false;
 const seenBookings = new Map();
 const userDialog = createKioskDialog({
-  path: kioskPath,
   request: kioskApi,
   paypalQr: preview?.paypalQr,
   preview: !!preview,
@@ -91,8 +90,8 @@ function stageTop() {
 function consentFields() {
   return `<div class="consent-box">
     <label class="check-field"><input name="accepted" type="checkbox" required>
-      <span>Ich akzeptiere die <a href="${kioskPath('/terms')}" data-terms-link>Nutzungsbedingungen</a>
-        und habe die <a href="${kioskPath('/privacy')}" data-privacy-link>Datenschutzerklärung</a> zur Kenntnis genommen.</span></label></div>`;
+      <span>Ich akzeptiere die <a href="/terms" data-terms-link>Nutzungsbedingungen</a>
+        und habe die <a href="/privacy" data-privacy-link>Datenschutzerklärung</a> zur Kenntnis genommen.</span></label></div>`;
 }
 
 function pinFields() {
@@ -272,7 +271,7 @@ async function confirmSeen(visit, kind, request) {
   const confirmation = {visit, kind, sending: true};
   seenBookings.set(request, confirmation);
   try {
-    await kioskApi(kioskPath('/api/kiosk/booking-seen'), {visit, kind, request});
+    await kioskApi('/api/kiosk/booking-seen', {visit, kind, request});
     confirmation.done = true;
   } catch (error) {
     if (error.status && error.status < 500) seenBookings.delete(request);
@@ -287,7 +286,7 @@ async function book(method, body, onSuccess) {
   revision++;
   renderBasket();
   try {
-    const result = await kioskApi(kioskPath('/api/kiosk/' + method), body);
+    const result = await kioskApi('/api/kiosk/' + method, body);
     uncertainBooking = undefined;
     if (state?.visit === body.visit && onSuccess(result)) {
       confirmSeen(body.visit, method === 'checkout' ? 'purchase' : method, body.request);
@@ -311,8 +310,8 @@ function applyState(next) {
   state = next;
   preview?.updateControls(next);
   document.getElementById('site-name').textContent = next.terminal;
-  termsLink.href = kioskPath('/terms');
-  privacyLink.href = kioskPath('/privacy');
+  termsLink.href = '/terms';
+  privacyLink.href = '/privacy';
   deadline = performance.now() + next.remaining * 1000;
   if (newVisit || next.stage === 'idle') {
     cart = new Map();
@@ -370,12 +369,12 @@ function updateTimers() {
     const visit = state.visit;
     expiredVisit = visit;
     applyState({...state, stage: 'idle', visit: null, remaining: 0, notice: null});
-    kioskApi(kioskPath('/api/kiosk/logout'), {visit}).catch(() => {});
+    kioskApi('/api/kiosk/logout', {visit}).catch(() => {});
   }
 }
 
 async function updateCatalog() {
-  catalog = await kioskApi(kioskPath('/api/catalog'));
+  catalog = await kioskApi('/api/catalog');
   renderCatalog();
 }
 
@@ -384,7 +383,7 @@ async function poll() {
   let delay = 550;
   try {
     if (!pending) {
-      const next = await kioskApi(kioskPath('/api/kiosk/state'));
+      const next = await kioskApi('/api/kiosk/state');
       if (stamp === revision) {
         const request = next.booking?.request || next.receipt?.request;
         const seen = seenBookings.get(request);
@@ -473,7 +472,7 @@ async function action(path, body, handleError = error => notify(error.message)) 
   revision++;
   renderBasket();
   try {
-    const result = await kioskApi(kioskPath('/api/kiosk/' + path), {visit, ...body});
+    const result = await kioskApi('/api/kiosk/' + path, {visit, ...body});
     if (state?.visit === visit) applyState(result);
   } catch (error) {
     await handleError(error);
@@ -493,7 +492,7 @@ function activity() {
     activityTimer = null;
     if (!canExtendVisit(state, visit)) return;
     lastActivity = performance.now();
-    kioskApi(kioskPath('/api/kiosk/activity'), {visit}).then(response => {
+    kioskApi('/api/kiosk/activity', {visit}).then(response => {
       if (canExtendVisit(state, visit)) deadline = performance.now() + response.remaining * 1000;
     }).catch(() => {});
   }, wait);
@@ -562,7 +561,7 @@ timeoutDialog.querySelector('[data-resume]').addEventListener('click', async () 
   resuming = true;
   const stamp = ++revision;
   try {
-    const response = await kioskApi(kioskPath('/api/kiosk/activity'), {visit});
+    const response = await kioskApi('/api/kiosk/activity', {visit});
     if (state?.visit === visit && revision === stamp) {
       deadline = performance.now() + response.remaining * 1000;
       updateTimers();

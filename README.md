@@ -90,4 +90,4 @@ Falls auf einem Terminal noch ein Pi-Installer vor v38.2 läuft, siehe [Terminal
 - [Betrieb, Datensicherung und Abnahme](docs/BETRIEB.md)
 - [MIT-Lizenz](LICENSE). Die mitgelieferten Schriften Fraunces und Plus Jakarta Sans stehen unter der [SIL Open Font License 1.1](licenses/fonts/).
 
-Die Browser-Oberflächen liegen in `static/`, der Raspberry-Pi-Installer in `pi/`. `server.py`, `web.py`, `store.py` und `finance.py` bilden die Python-Anwendung mit PostgreSQL.
+Die Browser-Oberflächen liegen in `static/`, der Raspberry-Pi-Installer in `pi/`. `web.py` verarbeitet HTTP-Anfragen, `server.py` steuert die Abläufe. `admin_operations.py` bündelt Schreiboperationen der Verwaltung, `policy_documents.py` pflegt die veröffentlichten Dokumentfassungen, und `validation.py` enthält die gemeinsame Eingabeprüfung. `store.py` und `finance.py` kapseln PostgreSQL-Abfragen, Buchungslogik und Exporte.

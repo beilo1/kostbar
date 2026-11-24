@@ -180,6 +180,8 @@ Die Seite **Verwaltung → Technik** zeigt Architektur, Datenfluss, API und Vers
 
 Bei Änderungen an HTTP-Endpunkten Methode, Berechtigung, Beschreibung und Eingaben in `api_reference.py` zusammen mit `web.py` und `server.py` pflegen. `python check_api_reference.py` gleicht die Pfade mit der Referenz ab und läuft beim Image-Build. Erlaubte HTTP-Methode, Rolle und Pflichtfelder der betroffenen Operation zusätzlich mit einem Aufruf prüfen. Bei Änderungen an Rollen, Datenfluss oder Architektur auch `static/technical-docs.js` und diese Anleitung aktualisieren. Paketvorgaben stehen in `requirements.txt`. Die Liste der vom Pi gemeldeten Pakete steht in `pi/versions.py`.
 
+Schreiboperationen in `admin_operations.py` verwenden die von `server.py` eröffnete Datenbanktransaktion. Eine Kontosperre, Kontoschließung oder ein PIN-Reset beendet die betroffenen Kiosksitzungen erst nach dem Commit. `policy_documents.py` lädt und aktualisiert die veröffentlichten Fassungen beim Start. Die Aktualisierungsmarker in PostgreSQL stellen sicher, dass Ergänzungen einmalig angewendet werden.
+
 QNAP und Synology verwenden dasselbe versionierte App-Image. Das gemeinsame `compose.common.yml` liegt als Referenz für die Technikansicht auch im Image. Der gewählte NAS-Unterordner setzt `KOSTBAR_DEPLOYMENT` und bindet seine Caddy-Konfiguration sowie `server.json` zur Laufzeit ein. Das jeweilige `nas/deployment.json` liefert Standardwerte für `configure.py` auf dem NAS. Die Wahl der NAS-Variante erfolgt beim Deployment.
 
 ### Patchstand bei Neuinstallation und späteren Builds

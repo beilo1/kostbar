@@ -47,6 +47,7 @@ function architecture(synology) {
       'Caddy stellt das HTTPS-Zertifikat über seine interne CA aus und leitet intern an das Backend weiter.'}
       App und Datenbank haben keine eigenen veröffentlichten Host-Ports.</p>
     <p>Das Backend läuft als einzelner Waitress-Prozess mit acht Threads. Admin-Sitzungen, Kiosksitzungen und ausstehende Kopplungen liegen im Prozessspeicher. Kiosk-Anfragen sind pro Terminal synchronisiert. Buchungen verwenden Kontosperren in PostgreSQL. Abgeschlossene Kopplungen und Geschäftsdaten bleiben in PostgreSQL erhalten.</p>
+    <p>Die HTTP-Schicht prüft Anfragen. Eigene Backend-Module übernehmen Schreiboperationen der Verwaltung und das Laden und Aktualisieren der veröffentlichten Dokumentfassungen. Nach einer Kontosperre, Kontoschließung oder einem PIN-Reset beendet die Anwendung die betroffene Kiosksitzung erst nach erfolgreichem Datenbank-Commit.</p>
   </section>`;
 }
 

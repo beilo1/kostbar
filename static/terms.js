@@ -1,4 +1,4 @@
-import { api, esc, kioskPath } from './shared.js';
+import { api, esc } from './shared.js';
 
 export function termsText(terms) {
   if (typeof terms.body === 'string') return terms.body;
@@ -39,7 +39,7 @@ export function formattedTerms(text) {
 
 export async function renderTerms(node, version) {
   try {
-    const terms = await api(kioskPath('/api/terms'));
+    const terms = await api('/api/terms');
     if (version && version !== terms.version) throw new Error('Die Fassung wurde aktualisiert. Öffne die Kasse erneut.');
     node.innerHTML = `<p class="terms-version">${esc(standLabel(terms.date))}</p>` + formattedTerms(termsText(terms));
   } catch (error) {
@@ -52,7 +52,7 @@ export async function renderTerms(node, version) {
     license.dataset.loading = 'true';
     const content = license.querySelector('.project-license-content');
     try {
-      const response = await fetch(kioskPath('/license'), {signal: AbortSignal.timeout(5000)});
+      const response = await fetch('/license', {signal: AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error('Lizenztext konnte nicht geladen werden.');
       const text = document.createElement('pre');
       text.textContent = await response.text();
@@ -87,7 +87,7 @@ export function standLabel(date) {
 
 export async function renderPrivacy(node) {
   try {
-    const document = await api(kioskPath('/api/privacy'));
+    const document = await api('/api/privacy');
     node.innerHTML = `<p class="terms-version">${esc(standLabel(document.date))}</p>` +
       (document.template ? '<p class="notice">Vorlage. Die Angaben des Betreibers sind noch zu ergänzen.</p>' : '') +
       formattedTerms(document.body);

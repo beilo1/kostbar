@@ -16,13 +16,17 @@ import sys
 from threading import BoundedSemaphore, Event, RLock, Thread
 from time import monotonic, time
 
+import admin_operations
 import finance
 import kiosk_state
-import store as data
 import schema_migrations
+import store as data
 import technical_docs
-from configure import config, device_profile, paypal_url, required_text, token, valid_origin, valid_terminal_id
+from configure import config, device_profile, paypal_url, token, valid_origin, valid_terminal_id
+from kiosk_state import Stage
 from pi.card_types import CARD_TYPES
+from policy_documents import document_body, load_documents, terms_document
+from validation import admin_name, number, request_id, string, terminal_pin
 from web import WsgiApp
 
 PAIR_COOKIE = "__Host-kk_pair"
@@ -42,7 +46,6 @@ PREVIEW_QUOTE_PATH = "/api/admin/terminal-preview/quote"
 PREVIEW_QR_PATH = "/api/admin/terminal-preview/paypal.svg"
 PREVIEW_PAYPAL_LABEL = "KoSTbar-Testzahlung"
 PAYPAL_SETTINGS_LOCK = 739310483
-CARD_MEDIA = {"badge": "Dienstausweis", "fob": "NFC-Schlüsselanhänger", "other": "Sonstiges"}
 ADMIN_IDLE = 600
 ADMIN_MAX = 8 * 3600
 ADMIN_FAILURE_WINDOW = 300
@@ -50,196 +53,6 @@ ADMIN_ACCOUNT_LIMIT = 8
 ADMIN_IP_LIMIT = 20
 ADMIN_RATE_MAX_KEYS = 4096
 ADMIN_PASSWORD_MIN = 12
-CARD_NOTICE = (
-    "Die Kennung deines Dienstausweises (UID) wird nicht im Klartext gespeichert. "
-    "Für die Wiedererkennung wird daraus mit einem geheimen Schlüssel ein Prüfwert "
-    "(HMAC-SHA-256) gebildet und gespeichert. Die ursprüngliche Kennung wird nur "
-    "während des Lese- und Anmeldevorgangs verarbeitet."
-)
-STORAGE_NOTICE = "Die Datenhaltung auf dem NAS erfolgt auf verschlüsseltem Speicher im internen Netzwerk."
-ADMIN_LOGIN_NOTICE = (
-    "Das Kassen-Team meldet sich für die Verwaltung mit einem persönlichen Anmeldenamen und Passwort an. "
-    "Im Betrieb wird das Passwort verschlüsselt über HTTPS übertragen. Auf dem NAS wird nur ein "
-    "Einweg-Prüfwert (scrypt-Hash) mit einem zufälligen Zusatzwert (Salt) gespeichert. "
-    "Bei der Anmeldung wird der Prüfwert erneut berechnet und verglichen. "
-    "Zum Schutz gegen wiederholte Fehlversuche begrenzt KoSTbar Anmeldungen je Anmeldename und Quell-IP. "
-    "Die Zähler werden vorübergehend im Arbeitsspeicher geführt."
-)
-BOOKING_RETENTION_NOTICE = (
-    "Personenbezogene Buchungsdetails zu Einkäufen, Zahlungen, Stornos und Korrekturen werden auf dem NAS "
-    "höchstens 90 Tage in der laufenden Anwendung vorgehalten und danach automatisch gelöscht. "
-    "Aus älteren Buchungen bleibt je Konto nur der zusammengefasste Saldoübertrag erhalten. "
-    "Offene Beträge und Guthaben bleiben erhalten. Monatsauswertungen enthalten auch danach Summen "
-    "pro Verkaufspunkt und Produkt ohne Kontozuordnung. Offene PayPal-Meldungen verfallen nach 90 Tagen ohne Gutschrift. "
-    "Für bestätigte und abgelehnte Meldungen beginnt die Frist mit der Buchung bzw. Entscheidung. "
-    "Zum Schutz vor Doppelbuchungen bleibt ein Prüfwert bestätigter PayPal-Transaktionen ohne Kontozuordnung erhalten. "
-    "Geschlossene Konten werden nach dem Saldenausgleich und Ablauf der verbleibenden Buchungs- und PayPal-Fristen gelöscht. "
-    "Allgemeine Verwaltungsprotokolle haben eine Frist von 180 Tagen. Sicherungen und Exporte haben eigene Fristen."
-)
-TERMINAL_STORAGE_NOTICE = (
-    "Die Raspberry Pis dienen als Anzeige und Eingabegeräte mit Kartenleser. Sie verarbeiten die für die "
-    "Bedienung nötigen KoSTbar-Daten vorübergehend im Arbeitsspeicher. Eine dauerhafte lokale Speicherung "
-    "von Personen-, Buchungs- oder Saldodaten findet auf den Terminals nicht statt. "
-    "Anwendungslogik und Datenbank laufen zentral auf dem NAS."
-)
-KIOSK_PAIRING_NOTICE = (
-    "Der Browser am Terminal speichert eine Gerätekennung als technisch notwendiges Cookie. "
-    "Sie ordnet das Gerät dem Verkaufspunkt zu. Das Kassen-Team kann diese Zuordnung aufheben."
-)
-LEGACY_TERMINAL_WIFI_NOTICE = (
-    "Bei der Ersteinrichtung beziehen die Terminals Systemupdates über ein WLAN mit gemeinsamem Kennwort. "
-    "Für den Produktivbetrieb melden sich die Raspberry Pis mit je einem Gerätezertifikat am internen WLAN an "
-    "(WPA-Enterprise mit EAP-TLS). Ein zentraler RADIUS-Dienst prüft die Geräteanmeldung. "
-    "Die Verbindung der Terminals zur Kasse läuft über HTTPS."
-)
-TERMINAL_WIFI_NOTICE = (
-    "Bei der Ersteinrichtung beziehen die Terminals Systemupdates über ein WLAN mit gemeinsamem Kennwort. "
-    "Im Betrieb melden sich die Raspberry Pis mit einem eigenen Benutzernamen und Passwort am internen Terminal-WLAN an "
-    "(WPA2-Enterprise mit PEAP/MSCHAPv2). Der RADIUS-Dienst prüft den Zugang. "
-    "Die Terminals prüfen das RADIUS-Serverzertifikat und verbinden sich über HTTPS mit der Kasse."
-)
-TERMINAL_WIFI_PRIVACY_NOTICE = (
-    "Für den Zugang zum internen WLAN verwendet jedes Terminal ein technisches Gerätekonto beim RADIUS-Dienst. "
-    "Die WLAN-Zugangsdaten werden außerhalb von KoSTbar verwaltet und sind keinem Kassenkonto zugeordnet."
-)
-KIOSK_TIMEOUT_NOTICE = (
-    f"Am gemeinsam genutzten Terminal endet deine Sitzung nach {SESSION_IDLE} Sekunden ohne Eingabe. "
-    f"Nach einem gebuchten Einkauf oder einer gebuchten Barzahlung wirst du nach {RECEIPT_SECONDS} Sekunden "
-    "automatisch abgemeldet. Dadurch sind deine Kontodaten für die nächste Person am Terminal nicht mehr sichtbar."
-)
-LOYALTY_NOTICE = (
-    "Für jedes bezahlte Heißgetränk erhältst du einen Stempel, auch wenn du mehrere auf einmal kaufst. "
-    "Nach zehn Stempeln wird ein Heißgetränk automatisch gratis. Bei mehreren Heißgetränken im selben "
-    "Warenkorb werden zuerst die günstigsten rabattiert. Gratisgetränke bringen keine Stempel. "
-    "Die Sammelkarte hat kein Ablaufdatum und gilt an allen Verkaufspunkten. Bei einem Storno "
-    "wird die Karte entsprechend korrigiert."
-)
-LOYALTY_PRIVACY_NOTICE = (
-    "Für die Sammelkarte wird der aktuelle Punktestand deinem Konto zugeordnet und ohne Ablaufdatum gespeichert. "
-    "Dieser Stand enthält keine Liste von Einkäufen, Produkten, Zeitpunkten oder Verkaufspunkten. "
-    "Buchungsbezogene Angaben zu Stempeln und Gratisgetränken werden zusammen mit den Einzelbuchungen "
-    "nach 90 Tagen gelöscht. Bei der Löschung des Kontos wird auch der Sammelkartenstand gelöscht."
-)
-LOYALTY_ADMIN_PRIVACY_NOTICE = (
-    "KoSTbar speichert zusätzlich die Gesamtzahl der eingelösten Gratisgetränke ohne Ablaufdatum. "
-    "Stornierte Gratisgetränke werden abgezogen. Das Kassen-Team kann beide Zähler pro Konto einsehen. "
-    "Bei der Kontolöschung entfällt auch dieser Zähler."
-)
-PIN_TERMS_NOTICE = (
-    "Bei der Registrierung vergibst und bestätigst du eine vierstellige PIN. "
-    "Damit meldest du dich über die Namenssuche ohne Karte an. "
-    "Wenn du die PIN vergisst, kann das Kassen-Team sie zurücksetzen. "
-    "Bei der nächsten Anmeldung mit Karte vergibst du selbst eine neue PIN."
-)
-TERMS_LIMIT = 16000
-DEFAULT_PRIVACY = {
-    "version": "vorlage-9",
-    "date": "2026-11-24",
-    "template": True,
-    "body": Path(__file__).with_name("privacy.md").read_text(encoding="utf-8").strip(),
-}
-
-
-def document_body(body):
-    raw = body.get("body")
-    if not isinstance(raw, str):
-        raise data.Problem(400, "Text fehlt.")
-    draft = raw.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not draft or len(draft) > TERMS_LIMIT or any(ord(c) < 32 and c not in "\n\t" for c in draft):
-        raise data.Problem(400, "Der Text muss 1 bis 16.000 Zeichen lang sein.")
-    return draft
-
-
-def string(value, limit, label):
-    try:
-        return required_text(value, limit, label)
-    except ValueError as exc:
-        raise data.Problem(400, str(exc)) from exc
-
-
-def number(value, lo, hi, label):
-    if type(value) is not int or not lo <= value <= hi:
-        raise data.Problem(400, f"{label} liegt außerhalb des erlaubten Bereichs.")
-    return value
-
-
-def flag(value):
-    if type(value) is not bool:
-        raise data.Problem(400, "Ungültiger Status.")
-    return int(value)
-
-
-def request_id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value):
-        raise data.Problem(400, "Ungültige Vorgangskennung.")
-    return value
-
-
-def terminal_pin(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}", value):
-        raise data.Problem(400, "Gib eine PIN mit genau vier Ziffern ein.")
-    return value
-
-
-def admin_name(value):
-    if not re.fullmatch(r"[a-z][a-z0-9._-]{2,31}", value):
-        raise ValueError("Adminname: 3–32 Zeichen, Kleinbuchstaben, Ziffern, Punkt, Minus, Unterstrich.")
-    return value
-
-
-def terms_document(cfg):
-    terms = cfg["terms"]
-    version = terms["version"]
-    if not isinstance(version, str) or not re.fullmatch(r"[a-zA-Z0-9._-]{1,40}", version):
-        raise SystemExit("Ungültige terms.version.")
-    document = {
-        "version": version,
-        "contact": string(terms.get("contact_name"), 100, "Ansprechpartner"),
-        "reach": string(terms.get("contact_reach"), 160, "Erreichbarkeit"),
-        "sections": [
-            {"title": "Freiwillige Nutzung", "text": "Das Terminal vereinfacht und digitalisiert die Abrechnung "
-             "der Kaffeekasse. Die Nutzung ist freiwillig. Du kannst weiterhin bar bezahlen. "
-             "Das Kassen-Team verbucht erhaltene Zahlungen bei Bedarf auf deinem Kassenkonto."},
-            {"title": "Was gespeichert wird", "text": "Die Kaffeekasse speichert Vor- und Nachname, eine "
-             "pseudonymisierte Kartenkennung, Einkäufe, Zahlungen, Korrekturen, den jeweiligen Verkaufspunkt "
-             "bei Käufen sowie Version und Zeitpunkt der Zustimmung. Der Saldo ergibt sich aus den Buchungen. "
-             "Dienstbezogene Daten wie Personalnummer, Arbeitszeiten und Zutrittsprotokolle werden nicht erhoben. "
-             "Vom Dienstausweis wird nur die technisch lesbare Kartenkennung verarbeitet. "
-             "Du kannst deine eigenen Buchungen am Terminal einsehen. Die Verwaltung der Konten und das gemeinsame Kassenbuch "
-             "sind dem Kassen-Team vorbehalten."},
-            {"title": "Lokaler Betrieb", "text": "Die Daten werden zentral auf dem NAS im internen Netz gespeichert. "
-             "Für Anmeldung, Einkauf und Barzahlung genügt im laufenden Betrieb das lokale Netz mit gültigen HTTPS-Zertifikaten. "
-             "Die Ersteinrichtung und die Erneuerung eines öffentlich ausgestellten Zertifikats können Internetzugang benötigen. "
-             "PayPal ist optional und wird auf dem eigenen Gerät über das Internet genutzt. "
-             "Beide Raspberry Pis greifen per HTTPS auf das NAS zu. Der Kartenleser ist jeweils am Raspberry Pi angeschlossen."},
-            {"title": "Verwendete Technik", "text": "Auf dem NAS laufen Docker Compose, Caddy, "
-             "ein Python-Backend mit Waitress und Psycopg sowie PostgreSQL. "
-             "Die Oberfläche nutzt HTML, CSS und JavaScript. Auf dem Raspberry Pi zeigt Chromium die Kasse an. "
-             "Der Kartenleser wird über USB, PC/SC (pcscd und libccid) sowie Python mit pyscard angesprochen."},
-        ],
-    }
-
-    if terms.get("department_notice"):
-        stored = document["sections"][1]
-        stored["text"] = stored["text"].replace(
-            "Vor- und Nachname, eine", "Vorname, Nachname, Referat, eine"
-        ).replace("Benutzerverwaltung und Buchungsverlauf sind dem Kassen-Team vorbehalten.",
-                  "Am Terminal ist der eigene Buchungsverlauf sichtbar. Die Benutzerverwaltung und das vollständige Kassenbuch sind dem Kassen-Team vorbehalten.")
-
-    if terms.get("payment_notice"):
-        document["sections"] += [
-            {"title": "Zahlungen", "text": "Eingetragenes Bargeld wird auf Vertrauensbasis sofort gutgeschrieben. "
-             "PayPal-Meldungen werden erst nach Prüfung des Zahlungseingangs durch das Kassen-Team gutgeschrieben. "
-             "Dabei werden Betrag, Referenz und die PayPal-Transaktions-ID gespeichert. "
-             "Der QR-Code öffnet PayPal auf deinem Mobilgerät."},
-        ]
-    document["sections"].append({"title": "Anmeldung ohne Karte", "text": PIN_TERMS_NOTICE})
-    if terms.get("kostbar_brand"):
-        for section in document["sections"]:
-            section["text"] = section["text"].replace("der Kaffeekasse", "von KoSTbar").replace(
-                "Die Kaffeekasse speichert", "KoSTbar speichert"
-            )
-    return document
 
 
 @dataclass
@@ -331,64 +144,15 @@ class App:
                for secret in tokens) or len(set(tokens)) != len(tokens):
             raise SystemExit("Für jedes Terminal ist ein eigener zufälliger Token erforderlich.")
         self.terms = terms_document(cfg)
-        self.version = self.terms["version"]
         self.admins = {}
         self.admin_login_lock = BoundedSemaphore(1)
         self.admin_limits = AdminLoginLimits()
         self.dummy_password = data.admin_password_hash(token())
         data.initialize(db, self.terminals, self.terms)
         with data.connect(db) as conn:
-            self.terms = data.current_terms(conn, self.terms)
-            self.privacy = data.current_privacy(conn, DEFAULT_PRIVACY)
-            data.remember_privacy(conn, self.privacy)
-            privacy_body = self.privacy["body"]
-            for marker, heading, notice in (
-                ("loyalty_privacy_notice_v1", "Sammelkarte", LOYALTY_PRIVACY_NOTICE),
-                ("loyalty_admin_privacy_notice_v1", "Sammelkarte im Admin-Bereich", LOYALTY_ADMIN_PRIVACY_NOTICE),
-                ("terminal_wifi_privacy_notice_v1", "Netzzugang der Terminals", TERMINAL_WIFI_PRIVACY_NOTICE),
-            ):
-                added = conn.execute("INSERT INTO settings (key,value) VALUES (%s,'1') ON CONFLICT DO NOTHING",
-                                     (marker,)).rowcount
-                if added and notice not in privacy_body:
-                    privacy_body += f"\n\n## {heading}\n{notice}"
-            if privacy_body != self.privacy["body"]:
-                previous = self.privacy
-                self.privacy = {**previous, "version": secrets.token_hex(12),
-                                "date": finance.local_date(data.now()).date().isoformat(), "body": privacy_body}
-                data.publish_privacy(conn, self.privacy, "System", previous)
-            original_body = body = data.terms_body(self.terms)
-            added_wifi_update = conn.execute(
-                "INSERT INTO settings (key,value) VALUES ('terminal_wifi_notice_v2','1') ON CONFLICT DO NOTHING"
-            ).rowcount
-            if added_wifi_update:
-                body = body.replace(LEGACY_TERMINAL_WIFI_NOTICE, TERMINAL_WIFI_NOTICE)
-            for marker, title, notices in (
-                ("card_storage_notice_v1", "Schutz deiner Ausweiskennung und Daten", (CARD_NOTICE, STORAGE_NOTICE)),
-                ("admin_login_notice_v1", "Schutz der Verwaltungszugänge", (ADMIN_LOGIN_NOTICE,)),
-                ("booking_retention_notice_v2", "Aufbewahrung von Buchungen", (BOOKING_RETENTION_NOTICE,)),
-                ("loyalty_terms_notice_v1", "Sammelkarte", (LOYALTY_NOTICE,)),
-                ("terminal_storage_notice_v1", "Datenspeicherung auf den Terminals", (TERMINAL_STORAGE_NOTICE,)),
-                ("kiosk_timeout_notice_v1", "Automatische Abmeldung am Terminal", (KIOSK_TIMEOUT_NOTICE,)),
-                ("kiosk_pairing_notice_v1", "Zuordnung der Terminals", (KIOSK_PAIRING_NOTICE,)),
-                ("terminal_wifi_notice_v1", "Netzzugang der Terminals", (TERMINAL_WIFI_NOTICE,)),
-                ("reader_and_runtime_notice_v1", "Karten und technischer Betrieb",
-                 ("KoSTbar speichert zusätzlich zum Prüfwert den vom Leser gemeldeten Kartentyp, sofern er bestimmbar ist. "
-                  "Das Kassen-Team kann hinterlegen, ob ein Dienstausweis, ein NFC-Schlüsselanhänger oder ein anderer Träger verwendet wird.",
-                  ("HTTPS endet bei diesem NAS am DSM Reverse Proxy. Caddy leitet die Anfragen intern an das Backend weiter."
-                   if self.deployment == "synology" else "Caddy stellt HTTPS mit seiner lokalen Zertifizierungsstelle bereit."),)),
-            ):
-                added = conn.execute("INSERT INTO settings (key,value) VALUES (%s,'1') ON CONFLICT DO NOTHING",
-                                     (marker,)).rowcount
-                if added and marker == "reader_and_runtime_notice_v1":
-                    body = body.replace(
-                        "Vom Dienstausweis wird nur die technisch lesbare Kartenkennung verarbeitet.",
-                        "Zur Anmeldung verarbeitet KoSTbar die technisch lesbare Kartenkennung.",
-                    )
-                missing = [notice for notice in notices if notice not in body]
-                if added and missing:
-                    body += f"\n\n## {title}\n" + "\n\n".join(missing)
-            if body != original_body:
-                self.terms = data.publish_terms(conn, body, "System", self.terms)
+            self.terms, self.privacy = load_documents(
+                conn, self.terms, self.deployment, session_idle=SESSION_IDLE, receipt_seconds=RECEIPT_SECONDS
+            )
             self.retired_terminals = {}
             for row in conn.execute("SELECT id,label,retired FROM terminals ORDER BY id"):
                 terminal_id = row["id"]
@@ -512,7 +276,7 @@ class App:
 
     def sweep_terminal(self, terminal):
         clock = monotonic()
-        if terminal.kiosk and terminal.kiosk["stage"] != "idle" and terminal.kiosk["until"] <= clock:
+        if terminal.kiosk and terminal.kiosk["stage"] != Stage.IDLE and terminal.kiosk["until"] <= clock:
             self.clear_kiosk(terminal)
         if terminal.capture:
             with self.admin_state_lock:
@@ -564,7 +328,7 @@ class App:
                 terminal.capture["card_type"] = card_type
             return
         session = terminal.kiosk
-        if not session or session["stage"] != "idle" or monotonic() - session["seen"] > 3:
+        if not session or session["stage"] != Stage.IDLE or monotonic() - session["seen"] > 3:
             return
         with data.connect(self.db) as db:
             row = self.account(db, card=card)
@@ -574,7 +338,7 @@ class App:
         elif not row and not self.registration:
             self.clear_kiosk(terminal, "Diese Karte ist noch nicht freigeschaltet.")
         else:
-            session.update(stage="register", card=card, card_type=card_type, notice=None, user=row["id"] if row else None,
+            session.update(stage=Stage.REGISTER, card=card, card_type=card_type, notice=None, user=row["id"] if row else None,
                            until=monotonic() + SESSION_IDLE, visit=token(), manual_pin_hash=None)
             if row:
                 if card_type and not row["card_type"]:
@@ -631,14 +395,14 @@ class App:
         profile = None
         booking = None
         catalog = None
-        if session["stage"] in ("shop", "consent", "pin-setup"):
+        if session["stage"] in (Stage.SHOP, Stage.CONSENT, Stage.PIN_SETUP):
             with data.connect(self.db) as db:
                 account = self.account(db, person=session["user"], policies=policies)
                 if not self.valid_account(account, session):
                     self.clear_kiosk(terminal, "Dieses Konto ist gesperrt oder der Zugang wurde geändert.")
                 else:
                     self.advance_kiosk(session, account)
-                    if session["stage"] == "shop":
+                    if session["stage"] == Stage.SHOP:
                         profile = {"first": account["first"], "balance": data.balance(db, session["user"]),
                                    "loyalty": data.loyalty_card(db, session["user"])}
                         booking = data.pending_kiosk_booking(db, session["user"])
@@ -657,7 +421,7 @@ class App:
             result["booking"] = booking
         if catalog is not None:
             result["catalog"] = catalog
-        if session["stage"] == "receipt":
+        if session["stage"] == Stage.RECEIPT:
             result["receipt"] = session["receipt"]
         return result
 
@@ -699,7 +463,7 @@ class App:
                 data.lock_booking_account(db, session["user"])
                 person = self.require_account(db, terminal, accepted=False, policies=policies)
             data.accept_policies(db, person["id"], *policies, terminal.id)
-        session.update(stage="consent", user=person["id"], until=monotonic() + SESSION_IDLE)
+        session.update(stage=Stage.CONSENT, user=person["id"], until=monotonic() + SESSION_IDLE)
         return self.state(terminal), None
 
     def kiosk_payment(self, terminal, path, body):
@@ -709,11 +473,11 @@ class App:
         cents = number(body.get("cents"), 1, 1000000, "Zahlungsbetrag")
         if path == "/api/kiosk/cash" and cents > finance.CASH_MAX_CENTS:
             raise data.Problem(400, "Barzahlungen am Terminal sind bis 100 € pro Vorgang möglich.")
-        if path == "/api/kiosk/cash" and session["stage"] == "receipt" and session["committed"] == "cash:" + key:
+        if path == "/api/kiosk/cash" and session["stage"] == Stage.RECEIPT and session["committed"] == "cash:" + key:
             if session["receipt"]["total"] != cents:
                 raise data.Problem(409, "Die Zahlung wurde bereits mit einem anderen Betrag gebucht.")
             return self.state(terminal), None
-        if session["stage"] != "shop":
+        if session["stage"] != Stage.SHOP:
             raise data.Problem(409, "Melde dich an, um eine Zahlung zu buchen.")
         with data.connect(self.db) as db:
             kind = "paypal" if path == "/api/kiosk/paypal" else "cash"
@@ -731,7 +495,7 @@ class App:
                 return {"reference": ref, "cents": cents}, None
             receipt = finance.cash(db, user, terminal.id, key, cents)
         receipt["request"] = key
-        session.update(stage="receipt", receipt=receipt, committed="cash:" + key,
+        session.update(stage=Stage.RECEIPT, receipt=receipt, committed="cash:" + key,
                        until=monotonic() + RECEIPT_SECONDS)
         return self.state(terminal), None
 
@@ -750,7 +514,7 @@ class App:
         if not session or cookies.get("kk_kiosk") != session["token"]:
             raise data.Problem(401, "Die Terminalsitzung ist abgelaufen.")
         if method == "GET" and path in ("/api/kiosk/payment", "/api/kiosk/paypal.svg"):
-            if session["stage"] != "shop":
+            if session["stage"] != Stage.SHOP:
                 raise data.Problem(403, "Bitte melde dich an.")
             query = query or {}
             with data.connect(self.db, snapshot=True) as db:
@@ -779,12 +543,12 @@ class App:
         if method != "POST":
             raise data.Problem(404, "Seite nicht gefunden.")
         if path == "/api/kiosk/manual-start":
-            if session["stage"] != "idle" or terminal.capture:
+            if session["stage"] != Stage.IDLE or terminal.capture:
                 raise data.Problem(409, "Das Terminal ist gerade belegt.")
-            session.update(stage="manual", visit=token(), until=monotonic() + SESSION_IDLE, notice=None)
+            session.update(stage=Stage.MANUAL, visit=token(), until=monotonic() + SESSION_IDLE, notice=None)
             return self.state(terminal), None
         if path in ("/api/kiosk/manual-search", "/api/kiosk/manual-login"):
-            if (session["stage"] != "manual" or terminal.capture
+            if (session["stage"] != Stage.MANUAL or terminal.capture
                     or not isinstance(body.get("visit"), str) or body["visit"] != session["visit"]):
                 raise data.Problem(409, "Die manuelle Anmeldung ist abgelaufen. Beginne erneut.")
             if path.endswith("search"):
@@ -801,7 +565,7 @@ class App:
         if path == "/api/kiosk/activity" and session["stage"] in kiosk_state.ACTIVITY_STAGES:
             session["until"] = monotonic() + SESSION_IDLE
             return {"remaining": SESSION_IDLE}, None
-        if path == "/api/kiosk/booking-seen" and session["stage"] in ("shop", "receipt"):
+        if path == "/api/kiosk/booking-seen" and session["stage"] in (Stage.SHOP, Stage.RECEIPT):
             key = request_id(body.get("request"))
             kind = body.get("kind")
             if kind not in ("purchase", "cash", "paypal"):
@@ -831,7 +595,7 @@ class App:
         if path in ("/api/kiosk/cash", "/api/kiosk/paypal"):
             return self.kiosk_payment(terminal, path, body)
         if path == "/api/kiosk/history":
-            if session["stage"] != "shop":
+            if session["stage"] != Stage.SHOP:
                 raise data.Problem(403, "Bitte melde dich an.")
             current, _, _ = finance.month_bounds(None)
             month, start, end = finance.month_bounds(body.get("month"))
@@ -849,7 +613,7 @@ class App:
             return {**entries, "month": month, "current": current, "terminals": self.historical_terminal_labels(),
                     "oldest": finance.local_date(oldest).strftime("%Y-%m") if oldest else current}, None
         if path == "/api/kiosk/checkout-quote":
-            if session["stage"] != "shop":
+            if session["stage"] != Stage.SHOP:
                 raise data.Problem(403, "Bitte melde dich an.")
             cart = self.checkout_cart(body)
             with data.connect(self.db, snapshot=True) as db:
@@ -880,8 +644,8 @@ class App:
     def kiosk_checkout(self, terminal, body):
         session = terminal.kiosk
         key = request_id(body.get("request"))
-        receipt_retry = session["stage"] == "receipt" and key == session["committed"]
-        if session["stage"] != "shop" and not receipt_retry:
+        receipt_retry = session["stage"] == Stage.RECEIPT and key == session["committed"]
+        if session["stage"] != Stage.SHOP and not receipt_retry:
             raise data.Problem(409, "Die Einkaufssitzung ist beendet.")
         cart = self.checkout_cart(body)
         discount = body.get("discount")
@@ -902,7 +666,7 @@ class App:
             if receipt.get("stamps_earned") or receipt.get("bonus"):
                 receipt["loyalty"] = data.loyalty_card(db, session["user"])
         receipt["request"] = key
-        session.update(stage="receipt", receipt=receipt, committed=key, receipt_cart=cart,
+        session.update(stage=Stage.RECEIPT, receipt=receipt, committed=key, receipt_cart=cart,
                        until=monotonic() + RECEIPT_SECONDS)
         return self.state(terminal), None
 
@@ -1230,130 +994,35 @@ class App:
         invalidate = None
         with data.connect(self.db) as db:
             if path == "/api/admin/product":
-                self.save_product(db, body, actor)
+                admin_operations.save_product(db, body, actor, self.terminal_labels())
             elif path == "/api/admin/product-status":
-                product = number(body.get("id"), 1, 2**31 - 1, "Produkt")
-                active = flag(body.get("active"))
-                labels = self.terminal_labels()
-                before = data.product_snapshot(db, product, labels)
-                if not db.execute("UPDATE products SET active=%s WHERE id=%s AND deleted=0", (active, product)).rowcount:
-                    raise data.Problem(404, "Produkt nicht gefunden.")
-                data.audit(db, actor, f"Produkt #{product} gespeichert.", before, data.product_snapshot(db, product, labels))
+                admin_operations.set_product_status(db, body, actor, self.terminal_labels())
             elif path == "/api/admin/delete-product":
-                product = number(body.get("id"), 1, 2**31 - 1, "Produkt")
-                before = data.product_snapshot(db, product, self.terminal_labels())
-                # Keep the product ID for journal items and monthly reports.
-                db.execute("UPDATE products SET deleted=1,active=0 WHERE id=%s", (product,))
-                db.execute("DELETE FROM product_terminals WHERE product=%s", (product,))
-                data.audit(db, actor, f"Produkt #{product} dauerhaft ausgeblendet.", before, None)
+                admin_operations.hide_product(db, body, actor, self.terminal_labels())
             elif path == "/api/admin/reset-pin":
-                person = number(body.get("id"), 1, 2**31 - 1, "Konto")
-                data.lock_booking_account(db, person)
-                removed = db.execute("DELETE FROM manual_credentials WHERE person=%s", (person,)).rowcount
-                db.execute("DELETE FROM manual_attempts WHERE person=%s", (person,))
-                if removed:
-                    data.audit(db, actor, f"PIN für Konto #{person} zurückgesetzt.",
-                               {"Manuelle Anmeldung": "Eingerichtet"}, {"Manuelle Anmeldung": "Neu einzurichten"},
-                               person=person)
-                invalidate = (person, "Die PIN wurde zurückgesetzt.", False)
-            elif path in ("/api/admin/paypal-confirm", "/api/admin/paypal-reject"):
-                payment = number(body.get("id"), 1, 2**53 - 1, "Zahlung")
-                if path.endswith("confirm"):
-                    cents = number(body.get("cents"), 1, 1000000, "Zahlungsbetrag")
-                    transaction = string(body.get("transaction"), 100, "PayPal-Transaktions-ID").upper()
-                    if not re.fullmatch(r"[A-Z0-9-]{5,100}", transaction):
-                        raise data.Problem(400, "Gib die PayPal-Transaktions-ID aus der Zahlung ein.")
-                    finance.paypal_resolve(db, payment, actor, cents=cents, transaction=transaction, key=self.key)
-                else:
-                    finance.paypal_resolve(db, payment, actor, note=string(body.get("note"), 240, "Begründung"),
-                                           key=self.key)
+                invalidate = admin_operations.reset_pin(db, body, actor)
+            elif path == "/api/admin/paypal-confirm":
+                admin_operations.confirm_paypal(db, body, actor, self.key)
+            elif path == "/api/admin/paypal-reject":
+                admin_operations.reject_paypal(db, body, actor, self.key)
             elif path == "/api/admin/person":
-                person = number(body.get("id"), 1, 2**31 - 1, "Konto")
-                first, last = string(body.get("first"), 60, "Vorname"), string(body.get("last"), 60, "Nachname")
-                active = flag(body.get("active"))
-                data.lock_booking_account(db, person)
-                before = data.person_snapshot(db, person)
-                if active and db.execute("SELECT closed_at FROM people WHERE id=%s", (person,)).fetchone()["closed_at"]:
-                    raise data.Problem(409, "Dieses Konto ist zur Löschung vorgemerkt.")
-                department = string(body["department"], 80, "Referat") if body.get("department") else before["Referat"]
-                if "card_medium" in body:
-                    medium = body["card_medium"]
-                    if not isinstance(medium, str) or (medium and medium not in CARD_MEDIA):
-                        raise data.Problem(400, "Unbekannter Kartenträger.")
-                    db.execute("UPDATE people SET card_medium=%s WHERE id=%s", (medium or None, person))
-                db.execute("UPDATE people SET first=%s,last=%s,department=%s,active=%s WHERE id=%s",
-                           (first, last, department, active, person))
-                data.audit(db, actor, f"Konto #{person} bearbeitet.", before, data.person_snapshot(db, person), person=person)
-                if not active:
-                    invalidate = (person, "Dieses Konto ist gesperrt.", False)
+                invalidate = admin_operations.edit_person(db, body, actor)
             elif path == "/api/admin/close-account":
-                person = number(body.get("id"), 1, 2**31 - 1, "Konto")
-                saved = db.execute("SELECT closed_at FROM people WHERE id=%s FOR NO KEY UPDATE", (person,)).fetchone()
-                if not saved:
-                    raise data.Problem(404, "Konto nicht gefunden.")
-                if not saved["closed_at"]:
-                    db.execute("UPDATE people SET active=0,closed_at=%s WHERE id=%s", (data.now(), person))
-                    db.execute("DELETE FROM manual_credentials WHERE person=%s", (person,))
-                    db.execute("DELETE FROM manual_attempts WHERE person=%s", (person,))
-                    data.audit(db, actor, f"Konto #{person} geschlossen.", person=person)
-                invalidate = (person, "Dieses Konto wurde geschlossen.", True)
+                invalidate = admin_operations.close_account(db, body, actor)
             elif path == "/api/admin/adjust":
-                person = number(body.get("id"), 1, 2**31 - 1, "Konto")
-                kind = body.get("kind")
-                if kind not in ("payment", "correction"):
-                    raise data.Problem(400, "Ungültige Buchungsart.")
-                cents = number(body.get("cents"), 1 if kind == "payment" else -1000000, 1000000, "Betrag")
-                if not cents:
-                    raise data.Problem(400, "Der Betrag muss ungleich null sein.")
-                note = string(body.get("note"), 240, "Begründung")
-                key_id = "admin:" + request_id(body.get("request"))
-                data.lock_booking_account(db, person)
-                existing = db.execute("SELECT id,kind,cents,note,actor FROM journal WHERE person=%s AND request_id=%s",
-                                      (person, key_id)).fetchone()
-                if existing and (existing["kind"], existing["cents"], existing["note"], existing["actor"]) != (kind, cents, note, actor):
-                    raise data.Problem(409, "Diese Vorgangskennung gehört zu einer anderen Verwaltungsbuchung. Prüfe den Kontoverlauf.")
-                if not existing:
-                    old_balance = data.balance(db, person)
-                    at = data.now()
-                    data.entry(db, person, kind, cents, actor, note, request_id=key_id, at=at)
-                    data.audit(db, actor, f"Saldo für Konto #{person} angepasst.",
-                               {"Saldo (Cent)": old_balance},
-                               {"Saldo (Cent)": old_balance + cents, "Buchungsbetrag (Cent)": cents, "Grund": note},
-                               booking_detail=True, person=person, at=at)
+                admin_operations.adjust_balance(db, body, actor)
             elif path == "/api/admin/reverse":
-                target = number(body.get("id"), 1, 2**53 - 1, "Buchung")
-                note = string(body.get("note"), 240, "Begründung")
-                account = db.execute("""SELECT p.id FROM people p JOIN journal j ON j.person=p.id
-                                        WHERE j.id=%s AND j.kind='purchase' FOR NO KEY UPDATE OF p""",
-                                     (target,)).fetchone()
-                if not account:
-                    raise data.Problem(404, "Kauf nicht gefunden.")
-                original = db.execute("SELECT * FROM journal WHERE id=%s AND kind='purchase' AND at>%s FOR UPDATE",
-                                      (target, data.booking_cutoff())).fetchone()
-                if not original:
-                    raise data.Problem(404, "Kauf nicht gefunden.")
-                if db.execute("SELECT id FROM journal WHERE reverses=%s", (target,)).fetchone():
-                    raise data.Problem(409, "Dieser Kauf wurde bereits storniert.")
-                at = data.now()
-                data.entry(db, original["person"], "reversal", -original["cents"], actor, note, reverses=target,
-                           terminal=original["terminal"], at=at, loyalty_delta=-original["loyalty_delta"])
-                redeemed = sum(line["qty"] for line in data.purchase_bonus(db, target))
-                data.update_loyalty(db, original["person"], -original["loyalty_delta"], redeemed_delta=-redeemed)
-                data.add_monthly_sale(db, original["terminal"], at, -original["cents"], target, reversal=True)
-                data.audit(db, actor, f"Kauf #{target} storniert.", {"Status": "Gebucht"},
-                           {"Status": "Storniert", "Gutschrift (Cent)": -original["cents"], "Begründung": note},
-                           booking_detail=True, person=original["person"], at=at)
+                admin_operations.reverse_purchase(db, body, actor)
             else:
                 raise data.Problem(404, "Seite nicht gefunden.")
         if invalidate:
-            person, notice, cancel_capture = invalidate
             # Kiosk requests acquire their terminal lock before opening a transaction.
             # Invalidate RAM only after the database transaction has released its locks.
             for terminal in self.terminals.values():
                 with terminal.lock:
-                    if terminal.kiosk and terminal.kiosk["user"] == person:
-                        self.clear_kiosk(terminal, notice)
-                    if cancel_capture and terminal.capture and terminal.capture["person"] == person:
+                    if terminal.kiosk and terminal.kiosk["user"] == invalidate.person:
+                        self.clear_kiosk(terminal, invalidate.notice)
+                    if invalidate.cancel_capture and terminal.capture and terminal.capture["person"] == invalidate.person:
                         terminal.capture = None
         return {}, None
 
@@ -1429,7 +1098,7 @@ class App:
                 with self.policy_lock:
                     terms, privacy_version = self.terms, self.privacy["version"]
                 return {"people": data.people_overview(db, terms["version"], privacy_version),
-                        "products": data.all_products(db), "card_types": CARD_TYPES, "card_media": CARD_MEDIA,
+                        "products": data.all_products(db), "card_types": CARD_TYPES, "card_media": admin_operations.CARD_MEDIA,
                         "categories": data.CATEGORIES, "icons": data.ICONS,
                         "terminals": self.terminal_labels(), "retired_terminals": self.retired_terminals,
                         "terms_version": terms["version"],
@@ -1452,38 +1121,6 @@ class App:
                 return data.list_audit(db, before)
         raise data.Problem(404, "Seite nicht gefunden.")
 
-    def save_product(self, db, body, actor):
-        name = string(body.get("name"), 80, "Produktname")
-        category, icon = body.get("category"), body.get("icon")
-        if not isinstance(category, str) or category not in data.CATEGORIES:
-            raise data.Problem(400, "Ungültige Kategorie.")
-        if not isinstance(icon, str) or icon not in data.ICONS:
-            raise data.Problem(400, "Ungültiges Symbol.")
-        cents = number(body.get("cents"), 1, 100000, "Preis")
-        active = flag(body.get("active"))
-        sites = body.get("terminals")
-        if (not isinstance(sites, list) or len(sites) > len(self.terminals)
-                or any(not isinstance(site, str) or site not in self.terminals for site in sites)
-                or len(set(sites)) != len(sites)):
-            raise data.Problem(400, "Ungültige Auswahl der Verkaufspunkte.")
-        values = (category, name, cents, icon, active)
-        before = None
-        labels = self.terminal_labels()
-        if body.get("id") is None:
-            product = db.execute(
-                "INSERT INTO products (category,name,cents,icon,active) VALUES (%s,%s,%s,%s,%s) RETURNING id", values
-            ).fetchone()["id"]
-        else:
-            product = number(body["id"], 1, 2**31 - 1, "Produkt")
-            before = data.product_snapshot(db, product, labels)
-            if not db.execute("UPDATE products SET category=%s,name=%s,cents=%s,icon=%s,active=%s WHERE id=%s",
-                              (*values, product)).rowcount:
-                raise data.Problem(404, "Produkt nicht gefunden.")
-        db.execute("DELETE FROM product_terminals WHERE product=%s", (product,))
-        with db.cursor() as cursor:
-            cursor.executemany("INSERT INTO product_terminals VALUES (%s,%s)", [(product, site) for site in sites])
-        data.audit(db, actor, f"Produkt #{product} gespeichert.", before, data.product_snapshot(db, product, labels))
-
     def terminal(self, key):
         if not isinstance(key, str) or key not in self.terminals:
             raise data.Problem(400, "Unbekannter Verkaufspunkt.")
@@ -1499,7 +1136,7 @@ class App:
         if path == "/api/admin/capture-start":
             if terminal.capture:
                 raise data.Problem(409, "Es läuft bereits ein Kartentausch.")
-            if terminal.kiosk and terminal.kiosk["stage"] != "idle":
+            if terminal.kiosk and terminal.kiosk["stage"] != Stage.IDLE:
                 raise data.Problem(409, "Am Terminal läuft gerade ein Einkauf oder eine Anmeldung.")
             person = number(body.get("id"), 1, 2**31 - 1, "Konto")
             with data.connect(self.db) as db:
@@ -1530,7 +1167,7 @@ class App:
                            (capture["card"], capture["card_type"], capture["person"]))
                 data.audit(db, actor, f"Karte für Konto #{capture['person']} an {terminal.label} ersetzt.",
                            {"Kartenzuordnung": "Bisherige Karte",
-                            "Kartentyp": CARD_TYPES.get(old["card_type"]), "Kartenträger": CARD_MEDIA.get(old["card_medium"])},
+                            "Kartentyp": CARD_TYPES.get(old["card_type"]), "Kartenträger": admin_operations.CARD_MEDIA.get(old["card_medium"])},
                            {"Kartenzuordnung": "Neue Karte",
                             "Kartentyp": CARD_TYPES.get(capture["card_type"]), "Kartenträger": None}, person=capture["person"])
             terminal.capture = None
@@ -1594,7 +1231,7 @@ class App:
             if "uid" in body and connected:
                 card_type = body.get("card_type")
                 self.scan(terminal, body["uid"], card_type if isinstance(card_type, str) and card_type in CARD_TYPES else None)
-            if body.get("issue") and terminal.kiosk and terminal.kiosk["stage"] == "idle" and not terminal.capture:
+            if body.get("issue") and terminal.kiosk and terminal.kiosk["stage"] == Stage.IDLE and not terminal.capture:
                 terminal.kiosk["notice"] = string(body["issue"], 120, "Leserhinweis")
         return {}, None
 

@@ -12,6 +12,7 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 
 import finance
+import policy_documents
 import schema_migrations as schema
 import server
 import store
@@ -53,7 +54,7 @@ class PostgreSQLTests(unittest.TestCase):
             db.execute('DROP SCHEMA "' + self.namespace + '" CASCADE')
 
     def initialize(self):
-        store.initialize({}, ("a", "b"), server.terms_document(self.config))
+        store.initialize({}, ("a", "b"), policy_documents.terms_document(self.config))
 
     def person(self, db, card="synthetic-test-card"):
         return db.execute("INSERT INTO people (card,first,last,department,created) VALUES (%s,'Test','Person','R1',%s) RETURNING id",
@@ -72,7 +73,7 @@ class PostgreSQLTests(unittest.TestCase):
     def test_radius_notices_update_a_published_v38_document_once(self):
         previous = server.App({}, self.config)
         old_terms_body = store.terms_body(previous.terms).replace(
-            server.TERMINAL_WIFI_NOTICE, server.LEGACY_TERMINAL_WIFI_NOTICE
+            policy_documents.TERMINAL_WIFI_NOTICE, policy_documents.LEGACY_TERMINAL_WIFI_NOTICE
         ) + "\n\n## Eigener Hinweis\nDie lokalen Kontaktdaten bleiben erhalten."
         old_privacy_body = "## Eigener Datenschutzhinweis\nDie lokalen Angaben bleiben erhalten."
         with self.connect() as db:
@@ -84,11 +85,11 @@ class PostgreSQLTests(unittest.TestCase):
         upgraded = server.App({}, self.config)
         new_body = store.terms_body(upgraded.terms)
         self.assertEqual(new_body.count("## Netzzugang der Terminals"), 1)
-        self.assertEqual(new_body, old_terms_body.replace(server.LEGACY_TERMINAL_WIFI_NOTICE,
-                                                         server.TERMINAL_WIFI_NOTICE))
+        self.assertEqual(new_body, old_terms_body.replace(policy_documents.LEGACY_TERMINAL_WIFI_NOTICE,
+                                                         policy_documents.TERMINAL_WIFI_NOTICE))
         self.assertNotEqual(upgraded.terms["version"], old_terms["version"])
         self.assertEqual(upgraded.privacy["body"],
-                         old_privacy_body + "\n\n## Netzzugang der Terminals\n" + server.TERMINAL_WIFI_PRIVACY_NOTICE)
+                         old_privacy_body + "\n\n## Netzzugang der Terminals\n" + policy_documents.TERMINAL_WIFI_PRIVACY_NOTICE)
         repeated = server.App({}, self.config)
         self.assertEqual(repeated.terms, upgraded.terms)
         self.assertEqual(repeated.privacy, upgraded.privacy)
@@ -220,8 +221,8 @@ class PostgreSQLTests(unittest.TestCase):
 
         app = server.App({}, self.config)
         self.assertIn(previous["body"], app.privacy["body"])
-        self.assertIn(server.LOYALTY_PRIVACY_NOTICE, app.privacy["body"])
-        self.assertIn(server.LOYALTY_ADMIN_PRIVACY_NOTICE, app.privacy["body"])
+        self.assertIn(policy_documents.LOYALTY_PRIVACY_NOTICE, app.privacy["body"])
+        self.assertIn(policy_documents.LOYALTY_ADMIN_PRIVACY_NOTICE, app.privacy["body"])
         self.assertNotEqual(app.privacy["version"], previous["version"])
         self.assertEqual(server.App({}, self.config).privacy, app.privacy)
         with self.connect() as db:
@@ -493,6 +494,42 @@ class PostgreSQLTests(unittest.TestCase):
         app.admins[name] = {"name": name, "password": "test-hash", "super_admin": super_admin,
                             "until": float("inf"), "max": float("inf")}
         return {"kk_admin": name}
+
+    def test_closing_an_account_ends_kiosk_session_only_after_commit(self):
+        app = server.App({}, self.config)
+        admin = self.feature_admin(app, "cashier", False)
+        with self.connect() as db:
+            person = self.person(db)
+            db.execute("INSERT INTO manual_credentials VALUES (%s,%s)", (person, "test-pin-hash"))
+        terminal = app.terminals["a"]
+        terminal.kiosk = {"stage": "shop", "user": person}
+        terminal.capture = {"person": person}
+
+        def close_account():
+            return app.route(None, "POST", "/api/admin/close-account", {}, {"id": person}, admin)
+
+        with patch("store.audit", side_effect=RuntimeError("synthetic audit failure")):
+            with self.assertRaisesRegex(RuntimeError, "synthetic audit failure"):
+                close_account()
+        with self.connect() as db:
+            self.assertIsNone(db.execute("SELECT closed_at FROM people WHERE id=%s", (person,)).fetchone()["closed_at"])
+            self.assertIsNotNone(db.execute("SELECT 1 FROM manual_credentials WHERE person=%s", (person,)).fetchone())
+        self.assertEqual(terminal.kiosk["stage"], "shop")
+        self.assertIsNotNone(terminal.capture)
+
+        clear_kiosk = app.clear_kiosk
+
+        def check_committed(site, notice):
+            with self.connect() as db:
+                self.assertIsNotNone(db.execute("SELECT closed_at FROM people WHERE id=%s", (person,)).fetchone()["closed_at"])
+                self.assertIsNone(db.execute("SELECT 1 FROM manual_credentials WHERE person=%s", (person,)).fetchone())
+            clear_kiosk(site, notice)
+
+        with patch.object(app, "clear_kiosk", side_effect=check_committed) as invalidation:
+            self.assertEqual(close_account(), ({}, None))
+        invalidation.assert_called_once()
+        self.assertEqual(terminal.kiosk["stage"], "idle")
+        self.assertIsNone(terminal.capture)
 
     def test_terminal_management_requires_super_admin_and_delete_keeps_history(self):
         app = server.App({}, self.config)

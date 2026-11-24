@@ -7,6 +7,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py web.py configure.py store.py schema_migrations.py finance.py kiosk_state.py technical_docs.py api_reference.py check_api_reference.py privacy.md ./
+COPY admin_operations.py policy_documents.py validation.py ./
 COPY pi/card_types.py pi/versions.py ./pi/
 COPY LICENSE Dockerfile compose.common.yml ./
 RUN python check_api_reference.py

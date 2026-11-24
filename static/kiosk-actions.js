@@ -11,7 +11,7 @@ function moveMonth(month, offset) {
   return new Date(Date.UTC(year, number - 1 + offset, 1)).toISOString().slice(0, 7);
 }
 
-export function createKioskDialog({path, state, apply, book, cancelManual, request = api, paypalQr, preview = false}) {
+export function createKioskDialog({state, apply, book, cancelManual, request = api, paypalQr, preview = false}) {
   const dialog = document.getElementById('kiosk-dialog');
   const titleElement = document.getElementById('kiosk-dialog-title');
   const content = document.getElementById('kiosk-dialog-content');
@@ -92,7 +92,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     show(title, description('Zahlungsmöglichkeiten werden geladen …') + errors());
     let options;
     try {
-      options = await request(path('/api/kiosk/payment'));
+      options = await request('/api/kiosk/payment');
     } catch (error) {
       if (revision === generation && dialog.open) showError(error);
       return;
@@ -119,7 +119,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
   function paypalImage(link, reference) {
     const params = new URLSearchParams({link});
     if (reference) params.set('reference', reference);
-    const image = paypalQr ?? path('/api/kiosk/paypal.svg?' + params);
+    const image = paypalQr ?? ('/api/kiosk/paypal.svg?' + params);
     return `<div class="paypal-code"><img src="${esc(image)}" alt="${preview ? 'QR-Code mit Testtext' : 'QR-Code zum PayPal.Me-Link'}" width="160" height="160">
       <p class="paypal-link">${esc(link)}</p></div>`;
   }
@@ -172,7 +172,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     show(title, description('Gesamtbetrag wird berechnet …') + errors());
     let quote;
     try {
-      quote = await request(path('/api/kiosk/checkout-quote'), {visit, lines});
+      quote = await request('/api/kiosk/checkout-quote', {visit, lines});
     } catch (error) {
       if (revision === generation && dialog.open && state()?.visit === visit) {
         show(title, description('Prüfe deinen Warenkorb und versuche es erneut.') + errors());
@@ -238,7 +238,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
       if (loading) return;
       loading = true;
       try {
-        const result = await request(path('/api/kiosk/history'), {visit, month, before});
+        const result = await request('/api/kiosk/history', {visit, month, before});
         if (revision !== generation || !dialog.open || state()?.visit !== visit) return;
         view = result;
         entries = before ? [...entries, ...result.entries] : result.entries;
@@ -308,7 +308,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
       try {
         const visit = state()?.stage === 'manual' ? state().visit : null;
         if (!visit) return;
-        const found = await request(path('/api/kiosk/manual-search'), {visit, query});
+        const found = await request('/api/kiosk/manual-search', {visit, query});
         if (results.isConnected && event.target.value.trim() === query) {
           results.innerHTML = found.people.length ? found.people.map(person =>
             `<button class="button outline" data-person="${person.id}">${esc(personLabel(person))}</button>`
@@ -333,7 +333,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
       if (formId === 'manual-form') {
         const visit = state()?.stage === 'manual' ? state().visit : null;
         if (!visit) throw new Error('Die manuelle Anmeldung ist abgelaufen. Beginne erneut.');
-        const result = await request(path('/api/kiosk/manual-login'), {visit, id: Number(fields.get('id')), pin: fields.get('pin')});
+        const result = await request('/api/kiosk/manual-login', {visit, id: Number(fields.get('id')), pin: fields.get('pin')});
         if (revision === generation && dialog.open && state()?.stage === 'manual' && state().visit === visit) apply(result);
       } else if (formId === 'payment-form') {
         const cents = eurosToCents(fields.get('amount'));
