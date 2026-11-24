@@ -10,7 +10,7 @@ Im gemeinsamen Hauptordner (oberhalb von QNAP/ und Synology/) mit Python 3.12 od
 python -m unittest discover -s tests -v
 ```
 
-Ohne `KOSTBAR_TEST_DSN` werden die PostgreSQL-Integrationstests ausdrücklich als übersprungen angezeigt. Die schnellen Tests benötigen nur die Python-Standardbibliothek. Der Installer-Pfadtest benötigt Linux und Bash. Er führt nur den lesenden Vorprüfungsabschnitt des Installers aus, keine Installation und keine Systemänderungen.
+Ohne `KOSTBAR_TEST_DSN` werden die PostgreSQL-Integrationstests ausdrücklich als übersprungen angezeigt. Die schnellen Tests benötigen nur die Python-Standardbibliothek. Der Installer-Pfadtest benötigt Linux und Bash. Er führt den lesenden Vorprüfungsabschnitt des Installers in einem temporären Verzeichnis aus. Weitere Tests prüfen die Übernahme von Skalierung, Touch-Zuordnung und Kalibrierung in die dedizierte Kiosksitzung sowie die erzeugten Chromium-Richtlinien für die unterstützten NAS-Adressen. Die Abnahme des Starts unter LightDM und labwc erfolgt auf dem Raspberry Pi.
 
 ## JavaScript-Verhalten
 
@@ -20,15 +20,15 @@ Mit Node.js 22 oder 24:
 node --test tests/frontend.test.mjs
 ```
 
-Die Tests prüfen die PIN-Felder und ihre Zifferntastatur. Sie führen die tatsächlichen Timer-/Aktivitätsfunktionen und Dialog-Ereignisse in einer kontrollierten Umgebung aus. Sie prüfen Rücksetzung, Warnung, Verlängerung, verspätete Antworten und Schließen des manuellen Dialogs. Sie ersetzen keine Abnahme der Darstellung am echten Touchscreen.
+Die Tests prüfen die PIN-Felder und ihre Zifferntastatur. Sie führen Timer-, Aktivitäts- und Dialogfunktionen in einer kontrollierten Umgebung aus. Sie prüfen auch den Lizenzdialog in der gemeinsamen Fußzeile und die Rücklinks der öffentlichen Dokumentseiten. Die Darstellung, den lokalen Lizenzabruf und Eingaben am echten Touchscreen im Rahmen der [Terminal-Abnahme](../docs/TERMINALS.md#6-am-echten-display-abnehmen) prüfen.
 
 ## PostgreSQL und vollständige Python-Suite
 
 Der folgende Compose-Stack erzeugt eine eigene PostgreSQL-17-Testinstanz ohne veröffentlichte Ports. Ihre Daten liegen ausschließlich im temporären Dateisystem des Testcontainers. Es werden keine Produktiv-Volumes eingebunden. Immer den eigenen Projektnamen und die separate Compose-Datei wie angegeben verwenden.
 
 ```sh
-docker compose -p kostbar-v37-tests -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
-docker compose -p kostbar-v37-tests -f docker-compose.test.yml down
+docker compose -p kostbar-tests -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
+docker compose -p kostbar-tests -f docker-compose.test.yml down
 ```
 
 Erwartet werden erfolgreiche Tests ohne übersprungene PostgreSQL- oder Installer-Tests. Für den ersten Build werden die in den Dockerfiles angegebenen Images und Python-Pakete benötigt.

@@ -124,7 +124,7 @@ Wenn eine Image-ID mehrere Tags hat, prüfe jeden Tag separat. Ein ungetaggtes I
 3. Alte KoSTbar-ZIP-Dateien, Datenbankexporte, Sicherungen und Snapshots liegen gegebenenfalls außerhalb des Projektordners. Prüfe diese Kopien separat. Gemeinsame Sicherungen und Snapshots können auch andere Anwendungen enthalten.
 4. Wenn die neue Synology-Instanz unter derselben Adresse erreichbar sein soll, kannst du DNS, DSM-Zertifikatszuordnung und Reverse-Proxy-Regel weiterverwenden. Mit der Beispielkonfiguration ist das DSM-Ziel `HTTP → 127.0.0.1:18765`. Ersetze vor dem Start den Wert des Anfrage-Headers `X-KoSTbar-Proxy-Key` durch den neuen `KASSE_DSM_PROXY_KEY` aus `Synology/.env`. Bei geändertem Hostnamen prüfe, welche alte KoSTbar-Regel entfallen kann. Für die weiteren Schritte siehe [Synology](../Synology/README.md#0-altinstallation-entfernen) bzw. [QNAP](../QNAP/README.md#0-altinstallation-entfernen).
 
-## 5. Abschluss prüfen und v40 neu installieren
+## 5. Abschluss prüfen und KoSTbar neu installieren
 
 Verwende denselben bestätigten Projektnamen aus Schritt 1. Setze `old_project` erneut, wenn du zwischenzeitlich eine neue SSH-Sitzung geöffnet hast.
 

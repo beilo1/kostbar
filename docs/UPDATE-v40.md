@@ -12,7 +12,7 @@ Entpacke `KoSTbar_v40.0.2.zip` separat. Auf dem QNAP eignet sich zum Beispiel `/
 sudo docker build -t kostbar-app:40.0.2 .
 ```
 
-Das QNAP TVS-872XT benötigt ein Image für `linux/amd64`. Falls du das Image auf einem anderen Rechner baust, folge den [Schritten zum Export und Import](../README.md#app-image-bereitstellen).
+Das QNAP TVS-872XT benötigt ein Image für `linux/amd64`. Exportiere bei einem Build auf einem anderen Rechner mit `docker image save -o kostbar-app-40.0.2.tar kostbar-app:40.0.2`. Übertrage die TAR-Datei auf das NAS und lade sie dort mit `sudo docker image load -i kostbar-app-40.0.2.tar`.
 
 ## 2. Bisheriges Deployment vorbereiten
 

@@ -1,5 +1,7 @@
 # Laufende KoSTbar-Instanz auf v39 aktualisieren
 
+Diese Anleitung gilt für den historischen Stand v39.0.0. Der [aktuelle Update-Ablauf](UPDATE-v40.1.md) beginnt beim passenden Quellstand.
+
 Beim Wechsel von v38.2.1 auf v39 tauscht Docker Compose nur den App-Container aus. Der Pi-Installer, das Datenbankschema und die veröffentlichten Nutzungs- und Datenschutzhinweise sind identisch. Die Schritte gelten für QNAP und Synology.
 
 ## 1. Neues Image bauen
@@ -10,7 +12,7 @@ Entpacke `KoSTbar_v39.zip` separat. Auf dem QNAP eignet sich zum Beispiel `/shar
 sudo docker build -t kostbar-app:39.0.0 .
 ```
 
-Das QNAP TVS-872XT benötigt ein Image für `linux/amd64`. Falls du das Image auf einem anderen Rechner baust, folge den [Schritten zum Export und Import](../README.md#app-image-bereitstellen).
+Das QNAP TVS-872XT benötigt ein Image für `linux/amd64`. Exportiere bei einem Build auf einem anderen Rechner mit `docker image save -o kostbar-app-39.0.0.tar kostbar-app:39.0.0`. Übertrage die TAR-Datei auf das NAS und lade sie dort mit `sudo docker image load -i kostbar-app-39.0.0.tar`.
 
 ## 2. Bisheriges Deployment vorbereiten
 

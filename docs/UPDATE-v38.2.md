@@ -1,5 +1,7 @@
 # KoSTbar v38.2.1 auf eine bestehende Installation anwenden
 
+Diese Anleitung gilt für den historischen Stand v38.2.1. Der [aktuelle Update-Ablauf](UPDATE-v40.1.md) beginnt beim passenden Quellstand.
+
 Von v38.2 auf v38.2.1 genügt der Austausch des App-Images (Schritte 1 und 2). Der PayPal-Dialog gibt dem vollständigen Link mehr Platz und zeigt ihn einzeilig. Außergewöhnlich lange Links lassen sich in ihrer Zeile seitlich verschieben.
 
 Die v38.2-Reihe übernimmt die größere Terminal-Schrift ins App-Image. Auf dem Pi konfiguriert der Installer native Touch-Ereignisse und schaltet die Passwort-Speicherabfrage von Chromium aus. KoSTbar verwendet ab v38.0.1 dasselbe Datenbankschema. Die vorhandene Konfiguration, PostgreSQL-Daten und Terminalkopplung kannst du übernehmen.
@@ -12,7 +14,7 @@ Das neue Projektarchiv in einen separaten Ordner entpacken. Im entpackten Haupto
 sudo docker build -t kostbar-app:38.2.1 .
 ```
 
-Wenn du auf einem anderen Rechner baust, das Image wie in der [Installationsanleitung](../README.md#app-image-bereitstellen) beschrieben exportieren und auf dem NAS laden. Das QNAP TVS-872XT benötigt `linux/amd64`.
+Wenn du auf einem anderen Rechner baust, exportiere mit `docker image save -o kostbar-app-38.2.1.tar kostbar-app:38.2.1`. Übertrage die TAR-Datei auf das NAS und lade sie dort mit `sudo docker image load -i kostbar-app-38.2.1.tar`. Das QNAP TVS-872XT benötigt `linux/amd64`.
 
 ## 2. Vorhandenen App-Container aktualisieren
 

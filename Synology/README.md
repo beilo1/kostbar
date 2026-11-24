@@ -10,6 +10,8 @@ Bei gleicher Adresse kannst du die vorhandene DSM-Reverse-Proxy-Regel, die Zerti
 
 ## 1. Konfiguration erzeugen
 
+Bei einer laufenden Installation den [Update-Ablauf mit Datensicherung und Rückweg](../docs/UPDATE-v40.1.md) verwenden. Die folgenden Schritte richten eine neue Instanz ein.
+
 ```bash
 cd /volume1/docker/kostbar
 sudo docker compose version
@@ -57,7 +59,7 @@ sudo docker compose -p kostbar up -d &&
 sudo docker compose -p kostbar ps -a
 ```
 
-Falls nur `docker-compose` verfügbar ist, dieses Kommando durchgängig verwenden. Beim ersten Start legt Compose die fehlenden Projekt-Volumes an. Bei einer vorhandenen Datenbank müssen die Zugangsdaten zur bestehenden Instanz passen.
+Bei einer aktuellen eigenständigen Compose-Installation kannst du `docker-compose` durchgängig verwenden. Prüfe die Version und führe die Konfigurationsprüfung aus. Beim ersten Start legt Compose die fehlenden Projekt-Volumes an. Bei einer vorhandenen Datenbank müssen die Zugangsdaten zur bestehenden Instanz passen.
 
 Wenn `db` und `app` gesund sind (`healthy`) und `proxy` läuft, prüfe Schema und HTTPS. Verwende bei einem abweichenden Hostnamen die in Schritt 1 konfigurierte Adresse.
 

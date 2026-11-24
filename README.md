@@ -20,7 +20,7 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 ![Geöffnete digitale Sammelkarte von Max mit sieben von zehn Stempeln](docs/images/sammelkarte.png)
 
-Die Screenshots zeigen fiktive Beispieldaten aus v38.0.1. In der aktuellen Verwaltung werden Benutzerlisten seitenweise geladen und Stornos im Kassenbuch standardmäßig ausgeblendet.
+Die Screenshots zeigen fiktive Beispieldaten aus v38.0.1. Die [aktuelle Bedienungsanleitung](docs/BETRIEB.md#nutzungsbedingungen-und-abnahme) beschreibt die neue Benutzerliste mit Seitenwechsel, den Storno-Filter und den Dialog **Projekt und Lizenz**.
 
 ## Hardware
 
@@ -40,6 +40,8 @@ NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine ver
 
 ## Installation
 
+Für eine bestehende Installation führt [Update auf v40.1.0-rc.1](docs/UPDATE-v40.1.md) vom Import des Kandidaten über Sicherung, App- und Pi-Update bis zur Abnahme. Für eine Neuinstallation gelten die folgenden Schritte.
+
 | | QNAP | Synology |
 | --- | --- | --- |
 | Anleitung | [QNAP einrichten](QNAP/README.md) | [Synology einrichten](Synology/README.md) |
@@ -48,10 +50,7 @@ NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine ver
 
 ### Neuinstallation
 
-```bash
-git clone https://github.com/beilo1/kostbar.git
-cd kostbar
-```
+Verwende den Quellstand, zu dem diese Anleitung gehört. Für einen noch nicht gemergten Kandidaten den [Branch aus dem Bundle importieren](docs/UPDATE-v40.1.md#frischen-checkout-in-powershell-anlegen) oder den veröffentlichten Refactoring-Branch auschecken. Wenn der Kandidat bereits in `main` gemergt ist, kannst du den entsprechenden Commit aus dem öffentlichen Repo verwenden. Vor dem Build den erwarteten Wert `40.1.0-rc.1` im Versionslabel des Dockerfiles und den ausgecheckten Commit prüfen.
 
 1. Das [gemeinsame App-Image bauen](#app-image-bereitstellen).
 2. Nach der passenden NAS-Anleitung eine neue Konfiguration erzeugen. Der Beispiel-Projektname für Docker Compose ist `kostbar`. Bei einer zusätzlichen Instanz einen eigenen Projektnamen sowie passende Bind-Adressen, Ports und Proxy-Ziele verwenden.
@@ -80,7 +79,7 @@ Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jewe
 
 ### Upgrade einer bestehenden Installation
 
-Für eine laufende v39- oder v40-Instanz verwendet der Release-Kandidat die vorhandene Datenbank und Konfiguration. Das NAS-Image und der Pi-Installer werden separat aktualisiert. Vorgehen, Abnahme und Rückweg stehen in [Update auf v40.1](docs/UPDATE-v40.1.md).
+Für eine laufende v39- oder v40-Instanz verwendet der Release-Kandidat die vorhandene Datenbank und Konfiguration. NAS-App und Pi lassen sich separat aktualisieren. Vorgehen, Abnahme und Rückweg stehen in der [Update-Anleitung](docs/UPDATE-v40.1.md).
 
 Beim Upgrade von v35 ergänzt die Anwendung weiterhin die Datenbankversionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
 

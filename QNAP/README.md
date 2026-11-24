@@ -2,6 +2,8 @@
 
 Container Station und Docker Compose müssen vorhanden sein. Per SSH mit deinem Wartungskonto arbeiten. **Den gesamten Projektordner** auf das NAS kopieren, beispielsweise nach `/share/Kaffeekasse/kostbar`; darin müssen unter anderem `configure.py`, `compose.common.yml`, `pi/` und `QNAP/` liegen.
 
+Bei einer laufenden Installation den [Update-Ablauf mit Datensicherung und Rückweg](../docs/UPDATE-v40.1.md) verwenden. Die folgenden Schritte richten eine neue Instanz ein.
+
 ## 0. Altinstallation entfernen
 
 Für eine bestehende v35-, v36- oder v37-Instanz gilt die [Upgrade-Anleitung](../README.md#upgrade-einer-bestehenden-installation). Falls du eine Altinstanz für eine Neuinstallation entfernen möchtest, folge der [Löschanleitung](../docs/ALTINSTALLATION-ENTFERNEN.md).
@@ -48,7 +50,7 @@ sudo docker compose -p kostbar up -d
 sudo docker compose -p kostbar ps
 ```
 
-Falls nur `docker-compose` verfügbar ist, dieses Kommando durchgängig anstelle von `docker compose` verwenden und die Konfigurationsprüfung ausführen. Kein Docker-Swarm-Deployment verwenden. Die App läuft als UID/GID `10001:10001` und muss die eingebundene Datei lesen können. PostgreSQL startet mit einem eigenen persistenten Volume. Die App wendet die versionierten Schema-Migrationen automatisch an. Es wird genau eine App-Instanz betrieben.
+Bei einer aktuellen eigenständigen Compose-Installation kannst du `docker-compose` durchgängig anstelle von `docker compose` verwenden. Prüfe die Version und führe die Konfigurationsprüfung aus. Die App läuft als UID/GID `10001:10001` und muss die eingebundene Datei lesen können. PostgreSQL startet mit einem eigenen persistenten Volume. Die App wendet die versionierten Schema-Migrationen automatisch an. Es wird genau eine App-Instanz betrieben.
 
 Alle drei Dienste müssen gesund bzw. gestartet sein. Bei Fehlern:
 

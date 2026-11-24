@@ -17,6 +17,8 @@ sudo reboot
 
 Displaymontage und GPIO-Anschluss nur ohne Strom vornehmen. Die vorgesehene Displayausrichtung ist Querformat, Ausgang `DSI-2`, Drehung 270°. Der ACS ACR1252U wird ebenso wie ACR122U und ACR1552U vom mitgelieferten PC/SC-Zugriff berücksichtigt. Die tatsächlich verwendeten Karten an jedem eingerichteten Terminal testen.
 
+Vor der Installation `labwc --help 2>&1 | grep -F -- --config-dir` ausführen. Die Option muss vorhanden sein. Das Wartungskonto braucht funktionierenden SSH- und sudo-Zugang, damit die Sitzung nach der Umstellung geprüft und bei Bedarf über SSH wiederhergestellt werden kann. Für ein bestehendes Terminal die [Schritte für Update und Rückweg](UPDATE-v40.1.md#3-einen-bestehenden-raspberry-pi-aktualisieren) verwenden. [labwc-Handbuch](https://labwc.github.io/labwc.1.html)
+
 ## 2. Produktives WLAN mit WPA2-Enterprise und RADIUS einrichten
 
 Stelle die Terminals einzeln um und verwende Ethernet oder die lokale Konsole vor der USBGuard-Sperre. Beim Aktivieren des neuen Profils kann eine SSH-Sitzung über WLAN abbrechen. Ein bereits funktionierendes PEAP/MSCHAPv2-Profil kannst du beim Update weiterverwenden.
@@ -256,7 +258,7 @@ Mit `sudo lightdm --show-config` den wirksamen Autologin `kiosk` und `autologin-
 
 ### Displaydrehung und Chromium
 
-Der Launcher läuft bei jedem Start der grafischen Sitzung des Kiosk-Kontos. Er setzt `wlr-randr --output DSI-2 --transform 270` vor der ersten Verbindungsprüfung zum NAS. So wird die Drehung auch nach einem Neustart erneut angewendet. Bei einem abweichenden Anschlussnamen zeigt `wlr-randr` in der laufenden labwc-Sitzung den tatsächlichen Ausgang. Den Namen bei Bedarf in `pi/start-kiosk.sh` anpassen. Kann die Drehung nicht angewendet werden, läuft der Kioskstart weiter.
+Der Launcher setzt `wlr-randr --output DSI-2 --transform 270` vor der ersten Verbindungsprüfung zum NAS. `wlr-randr` zeigt in einem Terminalfenster einer laufenden grafischen Wayland-Sitzung den tatsächlichen Ausgang. Den Namen möglichst vor der Kiosk-Umstellung aus der normalen Sitzung ermitteln. Bei abweichendem Namen den Ausgang in `pi/start-kiosk.sh` anpassen und den Installer erneut ausführen. Kann die Drehung nicht angewendet werden, läuft der Kioskstart weiter. Dann die Ausrichtung und Touch-Zuordnung vor der Freigabe korrigieren.
 
 Die Pflicht-Richtlinien in `/etc/chromium/policies/managed/90-kostbar-kiosk.json` gelten für Chromium auf dem gesamten Terminal-Pi. Sie erlauben die KoSTbar-Adresse aus dem Geräteprofil und den Projektpfad auf GitHub. Die Verwaltungsoberfläche und die Admin-API werden als Navigationsziele gesperrt. Datei-Auswahldialoge, Downloads, Drucken, Entwicklerwerkzeuge, Remote-Debugging und Erweiterungsinstallationen sind deaktiviert. Die Lizenz bleibt lokal in KoSTbar lesbar. Zahlungen per PayPal-QR werden auf einem separaten Gerät geöffnet. Die GitHub-Seite benötigt Internetzugang auf dem Pi. Chromium startet mit dem bestehenden persistenten Kiosk-Profil, damit die Gerätezuordnung erhalten bleibt. [Chromium-URL-Filter](https://www.chromium.org/administrators/url-blocklist-filter-format/)
 
