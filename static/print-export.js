@@ -1,6 +1,6 @@
 import { esc } from './shared.js';
-import { formattedTerms, projectNotice, standLabel } from './terms.js';
-import { PROJECT_QR } from './site-chrome.js';
+import { formattedTerms, standLabel } from './terms.js';
+import { projectNotice, PROJECT_QR } from './site-chrome.js';
 
 const documents = {
   terms: {title: 'Nutzungshinweise', filename: 'KoSTbar-Nutzungshinweise-A4.html'},

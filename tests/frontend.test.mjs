@@ -9,7 +9,7 @@ import {keyboardMarkup, pinField} from '../static/kiosk-keyboard.js';
 import {loyaltyCardMarkup} from '../static/loyalty-card.js';
 import {shopMarkup} from '../static/shop-view.js';
 import {esc} from '../static/shared.js';
-import {mountProjectFooter, PROJECT_URL} from '../static/site-chrome.js';
+import {mountProjectFooter, projectNotice, PROJECT_URL} from '../static/site-chrome.js';
 import {columnHeading, table} from '../static/ui-table.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -281,8 +281,9 @@ test('the shared footer opens the repository dialog and keeps the Berlin copyrig
   const trigger = new EventTarget();
   const close = new EventTarget();
   const dialog = new EventTarget();
+  const license = new EventTarget();
   dialog.setAttribute = () => {};
-  dialog.querySelector = () => close;
+  dialog.querySelector = selector => selector === '.project-license' ? license : close;
   dialog.showModal = () => { dialog.open = true; };
   dialog.close = () => { dialog.open = false; dialog.dispatchEvent(new Event('close')); };
   let focused = false;
@@ -300,6 +301,9 @@ test('the shared footer opens the repository dialog and keeps the Berlin copyrig
   update();
   assert.equal(year.textContent, '2026-2027');
   assert.match(footer.innerHTML, /aria-haspopup="dialog"[^>]*>beilo1\/kostbar/);
+  assert.match(dialog.innerHTML, /id="project-title">Projekt und Lizenz/);
+  assert.ok(dialog.innerHTML.includes(projectNotice({showTitle: false})));
+  assert.equal(projectNotice().replace('<h2>Projekt und Lizenz</h2>', ''), projectNotice({showTitle: false}));
   assert.ok(dialog.innerHTML.includes(`href="${PROJECT_URL}"`));
   assert.match(dialog.innerHTML, /src="\/static\/project-qr.svg"/);
   trigger.dispatchEvent(new Event('click'));

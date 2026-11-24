@@ -439,6 +439,7 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .terms-card section p, #terms-dialog-content section p { line-height: 1.55; overflow-wrap: anywhere; }
 .project-notice { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: start; gap: 10px 20px; }
 .project-notice > div { flex: 1 1 240px; min-width: 0; }
+.project-notice p { line-height: 1.55; overflow-wrap: anywhere; }
 .project-notice p + p { margin-top: 5px; }
 .project-notice a, .project-license summary { color: var(--deep); text-underline-offset: 3px; }
 .project-license { margin-top: 10px; }
@@ -446,10 +447,9 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .project-license-content pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.5 var(--text-font); }
 .project-qr { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
 #terms-dialog { width: min(670px, calc(100vw - 30px)); max-height: min(85dvh, 800px); }
-#project-dialog { width: min(420px, calc(100vw - 30px)); max-height: 90dvh; }
-.project-dialog-content { display: grid; justify-items: center; gap: 14px; text-align: center; }
-.project-dialog-content .project-qr { width: 176px; }
-.project-dialog-content a { overflow-wrap: anywhere; text-underline-offset: 3px; font-weight: 730; }
+#project-dialog { width: min(650px, calc(100vw - 30px)); max-height: 90dvh; }
+.project-dialog-content .project-notice { margin-top: 0; }
+.project-dialog-content a { overflow-wrap: anywhere; }
 #terms-dialog-content:focus-visible { outline: 2px solid #6a8b5c; outline-offset: -2px; }
 .consent-box { background: #f1f2e8; border-radius: 12px; padding: 6px 11px; margin-top: 11px; }
 .consent-box .check-field { margin-top: 1px; }
