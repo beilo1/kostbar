@@ -34,15 +34,27 @@
     <span>© <span id="copyright-year">2026</span> | beilo1</span>
   </footer>
   <dialog id="kiosk-dialog" aria-labelledby="kiosk-dialog-title">
+    <header class="kiosk-dialog-header">
+      <h2 id="kiosk-dialog-title"></h2>
+      <button class="button outline dialog-close" type="button" data-close-dialog aria-label="Fenster schließen">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
     <div id="kiosk-dialog-content"></div>
-    <form method="dialog"><button class="button outline compact">Schließen</button></form>
   </dialog>
   <dialog id="terms-dialog" aria-labelledby="terms-title">
-    <h2 id="terms-title">Nutzungsbedingungen</h2>
+    <header class="kiosk-dialog-header">
+      <h2 id="terms-title">Nutzungsbedingungen</h2>
+      <button class="button outline dialog-close" type="button" data-close-dialog aria-label="Fenster schließen">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
     <div id="terms-dialog-content" role="region" aria-label="Dokumenttext" tabindex="0" autofocus></div>
-    <form method="dialog"><button class="button outline compact">Schließen</button></form>
   </dialog>
   <dialog id="timeout-dialog" aria-labelledby="timeout-title" aria-describedby="timeout-description">
+    <button class="button outline dialog-close" type="button" data-logout aria-label="Fenster schließen und abmelden">
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
     <p class="eyebrow">INAKTIVITÄT</p>
     <h2 id="timeout-title">Noch da?</h2>
     <p id="timeout-description">Du wirst in wenigen Sekunden automatisch abgemeldet.</p>

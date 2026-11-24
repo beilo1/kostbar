@@ -18,6 +18,8 @@ const navigation = [
 ];
 const kinds = {purchase: 'Kauf', payment: 'Zahlung', correction: 'Korrektur', reversal: 'Storno'};
 const iconDefaults = {cold: 'water', hot: 'coffee', snack: 'salami', sweet: 'bar'};
+const peopleSortKeys = {Name: 'last', Vorname: 'first', Referat: 'department', Saldo: 'balance'};
+const peopleCollator = new Intl.Collator('de-DE', {numeric: true, sensitivity: 'base'});
 let session = null;
 let overview;
 let tab = 'journal';
@@ -39,6 +41,7 @@ let admins = [];
 let selectedPerson = '';
 let selectedTerminal = '';
 let search = '';
+let peopleSort = {key: 'last', direction: 'ascending'};
 let captureTimer;
 let capturing = null;
 let modalAction;
@@ -151,9 +154,13 @@ function amount(cents) {
   return `<span class="amount ${cents < 0 ? 'negative' : ''}">${euro(cents)}</span>`;
 }
 
-function table(labels, rows, empty) {
+function columnHeading(label) {
+  return `<th scope="col">${label}</th>`;
+}
+
+function table(labels, rows, empty, heading = columnHeading) {
   if (!rows) return `<p class="admin-empty">${empty}</p>`;
-  return '<div class="table-wrap"><table><thead><tr>' + labels.map(label => '<th scope="col">' + label + '</th>').join('') +
+  return '<div class="table-wrap"><table><thead><tr>' + labels.map(heading).join('') +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
@@ -172,8 +179,9 @@ function journalPanel() {
     const note = !items || j.kind === 'reversal' ? esc(j.note || '') : '';
     const details = [items, note].filter(Boolean).join('<br>');
     const reference = j.reverses ? `<small>Zu Kauf #${j.reverses}</small>` : j.reversed_by ? `<small>Storno #${j.reversed_by}</small>` : '';
+    const tone = j.kind === 'purchase' ? ' good' : j.kind === 'reversal' ? ' danger' : '';
     return `<tr><td><strong>#${j.id}</strong><small>${dateTime(j.at)}</small></td><td>${personName(j)}</td><td>${j.terminal ? esc(historicalSites()[j.terminal]) : '—'}</td>
-      <td><span class="pill">${kinds[j.kind]}</span>${reference}</td><td>${details}${j.actor ? '<small>Von ' + esc(j.actor) + '</small>' : ''}</td>
+      <td><span class="pill${tone}">${kinds[j.kind]}</span>${reference}</td><td>${details}${j.actor ? '<small>Von ' + esc(j.actor) + '</small>' : ''}</td>
       <td class="num">${amount(j.cents)}</td><td>${j.kind === 'purchase' && !j.reversed_by ? rowAction('reverse', j.id, 'Stornieren', 'undo', 'danger') : ''}</td></tr>`;
   }).join('');
   return `<div class="panel-heading"><div><h2>Kassenbuch</h2><p>Einzelbuchungen der letzten 90 Tage.</p></div>
@@ -184,14 +192,25 @@ function journalPanel() {
 }
 
 function consentCell(person) {
-  if (!person.consents.length) return '<span class="pill off">Offen</span>';
-  const details = row => `<small>Nutzung ${esc(row.version)} ·
-    ${row.privacy_version ? 'Datenschutz ' + esc(row.privacy_version) : 'Nur Nutzungsbedingungen'}</small>
-    <small>${dateTime(row.accepted_at)} · ${esc(historicalSites()[row.terminal])}</small>`;
-  const [latest, ...earlier] = person.consents;
-  return `<span class="pill ${person.terms_current ? 'good' : 'off'}">${person.terms_current ? 'Bestätigt' : 'Neue Fassung offen'}</span>
-    ${details(latest)}
-    ${earlier.length ? '<details><summary>Frühere Bestätigungen</summary>' + earlier.map(details).join('') + '</details>' : ''}`;
+  return person.terms_current ? '<span class="pill good">Bestätigt</span>' : '<span class="pill off">Offen</span>';
+}
+
+function peopleHeading(label) {
+  const key = peopleSortKeys[label];
+  if (!key) return columnHeading(label);
+  const direction = peopleSort.key === key ? peopleSort.direction : null;
+  const arrow = direction === 'ascending' ? '↑' : direction === 'descending' ? '↓' : '↕';
+  return `<th scope="col"${direction ? ` aria-sort="${direction}"` : ''}>
+    <button type="button" class="column-sort" data-people-sort="${key}">${label} <span aria-hidden="true">${arrow}</span></button>
+  </th>`;
+}
+
+function comparePeople(a, b) {
+  const {key, direction} = peopleSort;
+  const {compare} = peopleCollator;
+  const order = key === 'balance' ? a.balance - b.balance : compare(a[key], b[key]);
+  return (direction === 'ascending' ? order : -order) ||
+    compare(a.last, b.last) || compare(a.first, b.first) || a.id - b.id;
 }
 
 function peopleRows() {
@@ -199,27 +218,30 @@ function peopleRows() {
   return overview.people.filter(p => {
     const label = personLabel(p).toLocaleLowerCase('de-DE');
     return words.every(word => label.includes(word));
-  }).map(p =>
-    `<tr><td><strong>${personName(p)}</strong><small>Konto #${p.id} · seit ${dateTime(p.created)}</small>
-    <small>${esc(overview.card_types[p.card_type] || 'Kartentyp nicht bestimmt')}
-      ${p.card_medium ? ' · ' + esc(overview.card_media[p.card_medium]) : ''}</small></td>
+  }).sort(comparePeople).map(p => {
+    const medium = overview.card_media[p.card_medium];
+    const type = overview.card_types[p.card_type];
+    return `<tr><td><strong>${esc(p.last)}</strong><small>Konto #${p.id} · seit ${dateTime(p.created)}</small>
+    <small>${esc(medium || type || 'Kartentyp nicht bestimmt')}${medium && type ? ' · ' + esc(type) : ''}</small></td>
+    <td>${esc(p.first)}</td><td>${esc(p.department || '—')}</td>
     <td><span class="pill ${p.active ? 'good' : 'off'}">${p.closed_at ? 'Geschlossen' : p.active ? 'Aktiv' : 'Gesperrt'}</span></td>
     <td class="num">${amount(p.balance)}</td>
     <td><strong>${p.loyalty.stamps}/${p.loyalty.target}</strong>
       <small>${p.loyalty.redeemed} ${p.loyalty.redeemed === 1 ? 'Gratisgetränk' : 'Gratisgetränke'} eingelöst</small></td>
-    <td>${consentCell(p)}</td><td class="row-actions"><div class="action-list">
+    <td class="consent-status">${consentCell(p)}</td><td class="row-actions"><div class="action-list">
       ${rowAction('book', p.id, 'Buchung', 'plus', 'good')}
       ${rowAction('person', p.id, 'Bearbeiten', 'edit')}
       ${p.closed_at ? '' : rowAction('capture', p.id, 'Karte ersetzen', 'card', 'info')}
-      ${p.closed_at ? '' : rowAction('close-account', p.id, 'Konto schließen', 'close', 'warn')}
+      ${p.closed_at ? '' : rowAction('close-account', p.id, 'Konto schließen', 'close', 'danger')}
       ${rowAction('show', p.id, 'Verlauf', 'history')}
       ${exportLink('export-account?person=' + p.id, 'Export', 'Kontoauszug als Excel-Datei')}
-      ${p.manual_enabled ? rowAction('reset-pin', p.id, 'PIN zurücksetzen', 'key', 'warn', 'PIN zurücksetzen') : ''}</div></td></tr>`
-  ).join('');
+      ${p.manual_enabled ? rowAction('reset-pin', p.id, 'PIN zurücksetzen', 'key', 'warn', 'PIN zurücksetzen') : ''}</div></td></tr>`;
+  }).join('');
 }
 
 function peopleTable() {
-  return table(['Name', 'Status', 'Saldo', 'Sammelkarte', 'Zustimmung', 'Aktionen'], peopleRows(), 'Keine passenden Konten.');
+  return table(['Name', 'Vorname', 'Referat', 'Status', 'Saldo', 'Sammelkarte', 'Zustimmung', 'Aktionen'],
+    peopleRows(), 'Keine passenden Konten.', peopleHeading);
 }
 
 function peoplePanel() {
@@ -787,6 +809,17 @@ document.addEventListener('click', async event => {
   if (!button || busy || !session) return;
   const d = button.dataset;
   if ('close' in d) { editor.close(); return; }
+  if (d.peopleSort) {
+    const key = d.peopleSort;
+    const table = document.getElementById('people-table');
+    const scrollLeft = table.querySelector('.table-wrap').scrollLeft;
+    peopleSort = {key, direction: peopleSort.key === key && peopleSort.direction === 'ascending' ? 'descending' : 'ascending'};
+    table.innerHTML = peopleTable();
+    table.querySelector('.table-wrap').scrollLeft = scrollLeft;
+    table.querySelector(`[data-people-sort="${key}"]`).focus({preventScroll: true});
+    sessionTimer();
+    return;
+  }
   if ('documentExport' in d) {
     const form = button.form;
     const published = d.documentExport === 'published';

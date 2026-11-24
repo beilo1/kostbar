@@ -182,7 +182,7 @@ export function createTerminalPreview() {
         account = person;
         stage = 'shop';
         until = performance.now() + config.session_idle * 1000;
-        return snapshot();
+        return {...snapshot(), catalog};
       }
     }
     if (stage === 'register' && action === 'register') {

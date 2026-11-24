@@ -3,10 +3,10 @@ import {dateTime, esc} from './shared.js';
 const purpose = {
   chromium: 'Kiosk-Browser', python3: 'Laufzeit des Leserdiensts', 'python3-pyscard': 'PC/SC-Anbindung in Python',
   pcscd: 'PC/SC-Systemdienst', libccid: 'Treiber für USB-Kartenleser', 'pcsc-tools': 'Leserdiagnose',
-  lightdm: 'Automatische Desktop-Anmeldung', labwc: 'Wayland-Desktop und Kioskstart', curl: 'HTTPS-Verbindungsprüfung',
+  lightdm: 'Automatische Desktop-Anmeldung', labwc: 'Wayland-Desktop mit ausgeblendetem Mauszeiger', curl: 'HTTPS-Verbindungsprüfung',
   'wlr-randr': 'Displaydrehung beim Kioskstart',
   usbguard: 'USB-Gerätefreigabe am Terminal',
-  'network-manager': 'WLAN-Systemprofil und EAP-TLS-Anmeldung',
+  'network-manager': 'WLAN-Systemprofil und PEAP/MSCHAPv2-Anmeldung',
   unzip: 'Entpacken des Installationspakets', 'libnss3-tools': 'Zertifikatsimport in Chromium', 'util-linux': 'Prozesssperre beim Kioskstart',
 };
 
@@ -28,10 +28,10 @@ function architecture(synology) {
   const edge = synology ? 'DSM Reverse Proxy → Caddy' : 'Caddy mit interner CA';
   return `<section id="tech-arch"><h3>Architektur</h3>
     <h4>WLAN-Zugang der Terminals</h4>
-    <p>Für die Ersteinrichtung und Paketupdates nutzen die Pis ein vorläufiges PSK-WLAN. Im Produktivbetrieb verbindet NetworkManager jedes Terminal beim Start über ein systemweites WPA-Enterprise-Profil mit dem internen WLAN.</p>
-    <div class="tech-flow tech-flow-wifi" role="group" aria-label="Die Pis melden sich per EAP-TLS am WLAN-Access-Point an, der die Authentifizierung an RADIUS weiterleitet">
-      ${box('Raspberry Pis', 'Je ein Gerätezertifikat')}${arrow('802.1X / EAP-TLS')}
-      ${box('WLAN-Access-Point', 'WPA-Enterprise')}${arrow('RADIUS')}
+    <p>Für die Ersteinrichtung und Paketupdates nutzen die Pis ein vorläufiges PSK-WLAN. Im Produktivbetrieb verbindet NetworkManager jedes Terminal beim Start über ein systemweites WPA2-Enterprise-Profil mit dem separaten Terminal-VLAN.</p>
+    <div class="tech-flow tech-flow-wifi" role="group" aria-label="Die Pis melden sich per PEAP und MSCHAPv2 am WLAN-Access-Point an, der die Authentifizierung an RADIUS weiterleitet">
+      ${box('Raspberry Pis', 'Je ein Gerätekonto mit Passwort')}${arrow('PEAP / MSCHAPv2')}
+      ${box('WLAN-Access-Point', 'WPA2-Enterprise')}${arrow('RADIUS')}
       ${box('RADIUS-Dienst', 'Prüft die Geräteanmeldung')}
     </div>
     <p>Der Pi prüft die CA und den erwarteten Namen im RADIUS-Serverzertifikat. Das aktive WLAN-Profil und den Anmeldeerfolg prüfst du auf dem Pi und am RADIUS-Dienst.</p>

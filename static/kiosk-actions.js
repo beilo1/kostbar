@@ -13,6 +13,7 @@ function moveMonth(month, offset) {
 
 export function createKioskDialog({path, state, apply, book, cancelManual, request = api, paypalQr, preview = false}) {
   const dialog = document.getElementById('kiosk-dialog');
+  const titleElement = document.getElementById('kiosk-dialog-title');
   const content = document.getElementById('kiosk-dialog-content');
   let generation = 0;
   let focused;
@@ -27,8 +28,10 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     focused = null;
   }
 
-  function show(html) {
+  function show(title, html) {
+    titleElement.textContent = title;
     content.innerHTML = html;
+    content.scrollTop = 0;
     focused = content.querySelector('input:not([type=hidden])');
     if (!dialog.open) dialog.showModal();
     focused?.focus();
@@ -46,8 +49,8 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
       ).join('') + '</div>').join('') + (numeric ? '' : '<div><button type="button" data-dialog-key=" ">Leerzeichen</button></div>') + '</div>';
   }
 
-  function heading(title, description) {
-    return `<h2 id="kiosk-dialog-title">${title}</h2><p class="muted">${description}</p>`;
+  function description(text) {
+    return `<p class="muted">${text}</p>`;
   }
 
   function errors() {
@@ -61,19 +64,22 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
 
   function manual() {
     close();
-    show(heading('Ohne Ausweis anmelden', 'Suche nach deinem Namen oder Referat und wähle dein Konto.') +
-      `<label>Name oder Referat suchen<input id="manual-query" type="text" inputmode="none" maxlength="120" autocomplete="off"></label>
-      <div id="manual-results" class="manual-results" aria-live="polite">Gib mindestens zwei Zeichen ein.</div>
-      ${errors()}${keypad({uppercase: true, digits: true})}`);
+    show('Ohne Ausweis anmelden',
+      `<div class="manual-search-info">
+        <label>Name oder Referat suchen<input id="manual-query" type="text" inputmode="none" maxlength="120"
+          autocomplete="off" placeholder="Gib mindestens zwei Zeichen ein"></label>
+        <div id="manual-results" class="manual-results" aria-live="polite"></div>
+        ${errors()}
+      </div>${keypad({uppercase: true, digits: true})}`);
   }
 
   function manualAccount(id, name) {
-    show(heading('PIN eingeben', `Konto <strong>${esc(name)}</strong>`) +
+    show('PIN eingeben', description(`Konto <strong>${esc(name)}</strong>`) +
       `<form id="manual-form">
         <input type="hidden" name="id" value="${id}">
         ${pinField('pin', 'Vierstellige PIN')}
         ${keypad({numeric: true, pin: true})}${errors()}
-        <div class="form-actions"><button type="button" class="button outline" data-manual-back>Zur Suche</button>
+        <div class="form-actions centered-actions"><button type="button" class="button outline" data-manual-back>Zur Suche</button>
         <button class="button primary" type="submit">Anmelden</button></div>
       </form>`);
   }
@@ -82,7 +88,8 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     const visit = state().visit;
     close();
     const revision = generation;
-    show(heading('Saldo begleichen', 'Zahlungsmöglichkeiten werden geladen …') + '<p class="form-error" role="alert"></p>');
+    const title = 'Saldo begleichen';
+    show(title, description('Zahlungsmöglichkeiten werden geladen …') + errors());
     let options;
     try {
       options = await request(path('/api/kiosk/payment'));
@@ -92,9 +99,9 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     }
     if (revision !== generation || !dialog.open || state()?.visit !== visit) return;
     const open = Math.max(0, -state().profile.balance);
-    const methods = '<div class="form-actions"><button class="button primary" data-method="cash">Barzahlung</button>' +
+    const methods = '<div class="form-actions centered-actions"><button class="button primary" data-method="cash">Barzahlung</button>' +
       (options.link ? '<button class="button paypal" data-method="paypal">PayPal</button>' : '') + '</div>';
-    show(heading('Saldo begleichen', `Offener Betrag <strong>${euro(open)}</strong>`) + methods +
+    show(title, description(`Offener Betrag <strong>${euro(open)}</strong>`) + methods +
       (options.pending.length ? '<h3>Offene PayPal-Meldungen</h3><div class="manual-results">' + options.pending.map(item =>
         `<button class="button outline" data-existing="${esc(item.reference)}">${esc(item.reference)} · ${euro(item.cents)}</button>`
       ).join('') + '</div>' : ''));
@@ -119,36 +126,40 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
 
   function paymentForm(method, open, {link, cash_max: cashMax}) {
     const cash = method === 'cash';
-    show(heading(cash ? 'Barzahlung eintragen' : 'PayPal-Zahlung vorbereiten', cash
+    show(cash ? 'Barzahlung eintragen' : 'PayPal-Zahlung vorbereiten', description(cash
       ? (preview ? 'Gib einen Testbetrag für die Barzahlung ein.' : 'Lege das Bargeld in die Kasse und gib den gezahlten Betrag ein.')
       : (preview ? 'Gib einen Testbetrag ein und erzeuge eine Testreferenz.'
-        : 'Bereite zuerst die Zahlung vor. Übernimm beim Bezahlen am Handy die angezeigte Referenz als Nachricht.')) +
-      `<form id="payment-form" data-method="${method}"${cash ? ` data-limit="${cashMax}"` : ''}>
+        : 'Erzeuge eine Referenz. Gib sie beim Bezahlen am Handy als Nachricht ein.')) +
+      `${cash ? '' : '<div class="paypal-layout">'}
+      <form id="payment-form" data-method="${method}"${cash ? ` data-limit="${cashMax}"` : ''}>
         <label class="amount-entry">Betrag in Euro<input name="amount" type="text" inputmode="none" maxlength="9" required
           value="${open ? esc(((cash ? Math.min(open, cashMax) : open) / 100).toFixed(2).replace('.', ',')) : ''}" placeholder="0,00"></label>
         ${cash ? `<p class="hint cash-limit">Maximal ${euro(cashMax)} je Vorgang</p>` : ''}
         ${keypad({numeric: true})}${errors()}
-        <div class="form-actions"><button type="button" class="button outline" data-payment-back>Zurück</button>
+        <div class="form-actions centered-actions"><button type="button" class="button outline" data-payment-back>Zurück</button>
         <button class="button ${cash ? 'primary' : 'paypal'}" type="submit">${cash ? 'Bargeld bestätigen' : 'Referenz erzeugen'}</button></div>
-      </form>${cash ? '' : paypalImage(link)}`);
+      </form>${cash ? '' : paypalImage(link) + '</div>'}`);
     content.dataset.link = link;
     focused?.select();
   }
 
   function paypalDetails(link, item) {
-    const description = preview ? 'Simulierte Zahlungsanweisung mit Testreferenz.'
+    const intro = preview ? 'Simulierte Zahlungsanweisung mit Testreferenz.'
       : link ? `Scanne den Code, sende <strong>${euro(item.cents)}</strong> und gib diese Referenz als Nachricht ein.`
       : 'Für diese Meldung ist derzeit kein Zahlungslink verfügbar.';
-    show(heading('Mit PayPal bezahlen', description) +
-      `<p class="payment-reference">${esc(item.reference)}</p>${link ? paypalImage(link, item.reference) : ''}
-      <p>Die Meldung ist gespeichert. Der Saldo ändert sich, sobald das Kassen-Team den Zahlungseingang bestätigt.</p>`);
+    const instructions = `<div class="paypal-instructions">
+      <p class="payment-reference">${esc(item.reference)}</p>
+      <p>Die Meldung ist gespeichert. Der Saldo ändert sich, sobald das Kassen-Team den Zahlungseingang bestätigt.</p>
+    </div>`;
+    show('Mit PayPal bezahlen', description(intro) +
+      (link ? `<div class="paypal-layout">${instructions}${paypalImage(link, item.reference)}</div>` : instructions));
   }
 
   function loyalty() {
     const card = state().profile.loyalty;
     if (!card) return;
     close();
-    show(loyaltyCardMarkup(card, {dialog: true}) +
+    show('Deine Sammelkarte', loyaltyCardMarkup(card, {dialog: true}) +
       '<p class="muted">Jedes bezahlte Heißgetränk bringt einen Stempel. Die Karte gilt an allen Verkaufspunkten. ' +
       'Dein Gratisgetränk wird im Warenkorb automatisch abgezogen.</p>');
   }
@@ -157,20 +168,21 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     close();
     const visit = state().visit;
     const revision = generation;
-    show(heading('Einkauf bestätigen', 'Gesamtbetrag wird berechnet …') + errors());
+    const title = 'Einkauf bestätigen';
+    show(title, description('Gesamtbetrag wird berechnet …') + errors());
     let quote;
     try {
       quote = await request(path('/api/kiosk/checkout-quote'), {visit, lines});
     } catch (error) {
       if (revision === generation && dialog.open && state()?.visit === visit) {
-        show(heading('Einkauf bestätigen', 'Prüfe deinen Warenkorb und versuche es erneut.') + errors());
+        show(title, description('Prüfe deinen Warenkorb und versuche es erneut.') + errors());
         showError(error);
         if (error.status === 409) await catalogChanged();
       }
       return;
     }
     if (revision !== generation || !dialog.open || state()?.visit !== visit) return;
-    show(heading('Einkauf bestätigen', 'Prüfe deinen Warenkorb und bestätige den Gesamtbetrag.') +
+    show(title, description('Prüfe deinen Warenkorb und bestätige den Gesamtbetrag.') +
       `<ul class="purchase-lines">${quote.lines.map(line => {
         const paid = line.qty - line.bonus_qty;
         return `${paid ? `<li><span>${paid} × ${esc(line.name)}</span><strong>${euro(paid * line.cents)}</strong></li>` : ''}
@@ -193,8 +205,9 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     let view;
     let entries = [];
     let loading = false;
-    show(heading('Deine Buchungen', 'Käufe, Zahlungen und Saldoänderungen.') +
-      '<p class="form-error" role="alert"></p><p role="status">Wird geladen …</p>');
+    const title = 'Deine Buchungen';
+    const intro = description('Käufe, Zahlungen und Saldoänderungen.');
+    show(title, intro + errors() + '<p role="status">Wird geladen …</p>');
 
     function render() {
       const rows = entries.map(row => {
@@ -210,7 +223,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
           ${lines ? '<ul>' + lines + '</ul>' : ''}</div>
           <strong class="${row.cents < 0 ? 'negative' : ''}">${row.cents > 0 ? '+' : ''}${euro(row.cents)}</strong></li>`;
       }).join('');
-      show(heading('Deine Buchungen', 'Käufe, Zahlungen und Saldoänderungen.') +
+      show(title, intro +
         `<nav class="history-nav" aria-label="Buchungsmonat">
           <button class="button outline compact" type="button" data-month="-1" aria-label="Vorheriger Monat" ${view.month <= view.oldest ? 'disabled' : ''}>‹</button>
           <strong aria-live="polite">${monthFormat.format(new Date(view.month + '-01T00:00:00Z'))}</strong>
@@ -289,7 +302,7 @@ export function createKioskDialog({path, state, apply, book, cancelManual, reque
     const query = event.target.value.trim();
     const results = content.querySelector('#manual-results');
     clearTimeout(timer);
-    results.textContent = query.length >= 2 ? 'Suche läuft …' : 'Gib mindestens zwei Zeichen ein.';
+    results.textContent = query.length >= 2 ? 'Suche läuft …' : '';
     if (query.length < 2) return;
     timer = setTimeout(async () => {
       try {

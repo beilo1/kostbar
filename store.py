@@ -232,6 +232,10 @@ def available_products(db, terminal):
     )]
 
 
+def product_catalog(db, terminal):
+    return {"products": available_products(db, terminal), "categories": CATEGORIES}
+
+
 def all_products(db):
     assignments = {}
     for row in db.execute("SELECT product,terminal FROM product_terminals ORDER BY terminal"):

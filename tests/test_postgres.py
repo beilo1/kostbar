@@ -69,6 +69,35 @@ class PostgreSQLTests(unittest.TestCase):
             self.assertEqual(schema.schema_status(db), before)
             self.assertEqual(db.execute("SELECT first FROM people WHERE id=%s", (person,)).fetchone()["first"], "Test")
 
+    def test_radius_notices_update_a_published_v38_document_once(self):
+        previous = server.App({}, self.config)
+        old_terms_body = store.terms_body(previous.terms).replace(
+            server.TERMINAL_WIFI_NOTICE, server.LEGACY_TERMINAL_WIFI_NOTICE
+        ) + "\n\n## Eigener Hinweis\nDie lokalen Kontaktdaten bleiben erhalten."
+        old_privacy_body = "## Eigener Datenschutzhinweis\nDie lokalen Angaben bleiben erhalten."
+        with self.connect() as db:
+            old_terms = store.publish_terms(db, old_terms_body, "test", previous.terms)
+            old_privacy = {**previous.privacy, "version": "privacy-v38", "template": False, "body": old_privacy_body}
+            store.publish_privacy(db, old_privacy, "test", previous.privacy)
+            db.execute("DELETE FROM settings WHERE key IN ('terminal_wifi_notice_v2', 'terminal_wifi_privacy_notice_v1')")
+
+        upgraded = server.App({}, self.config)
+        new_body = store.terms_body(upgraded.terms)
+        self.assertEqual(new_body.count("## Netzzugang der Terminals"), 1)
+        self.assertEqual(new_body, old_terms_body.replace(server.LEGACY_TERMINAL_WIFI_NOTICE,
+                                                         server.TERMINAL_WIFI_NOTICE))
+        self.assertNotEqual(upgraded.terms["version"], old_terms["version"])
+        self.assertEqual(upgraded.privacy["body"],
+                         old_privacy_body + "\n\n## Netzzugang der Terminals\n" + server.TERMINAL_WIFI_PRIVACY_NOTICE)
+        repeated = server.App({}, self.config)
+        self.assertEqual(repeated.terms, upgraded.terms)
+        self.assertEqual(repeated.privacy, upgraded.privacy)
+        with self.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) AS total FROM terms_versions WHERE version=%s",
+                                        (old_terms["version"],)).fetchone()["total"], 1)
+            self.assertEqual(db.execute("SELECT COUNT(*) AS total FROM privacy_versions WHERE version=%s",
+                                        (old_privacy["version"],)).fetchone()["total"], 1)
+
     def test_unversioned_v35_schema_keeps_accounts_and_balances(self):
         with self.connect() as db:
             db.execute(schema.SCHEMA, prepare=False)
@@ -647,7 +676,11 @@ class PostgreSQLTests(unittest.TestCase):
         kiosk("logout")
         kiosk("manual-start")
         self.assertEqual(kiosk("manual-search", query="R1")["people"][0]["id"], person)
-        self.assertEqual(kiosk("manual-login", id=person, pin="0042")["stage"], "shop")
+        login = kiosk("manual-login", id=person, pin="0042")
+        self.assertEqual(login["stage"], "shop")
+        self.assertEqual(login["catalog"], app.catalog(terminal))
+        self.assertGreater(len(login["catalog"]["products"]), 0)
+        self.assertNotIn("catalog", app.state(terminal))
 
         with self.assertRaises(store.Problem) as unauthorized:
             app.admin_route("POST", "/api/admin/reset-pin", {}, {"id": person}, {}, None)

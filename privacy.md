@@ -27,6 +27,9 @@ Sicherungen und Snapshots: [EINTRAGEN: tatsächliche rollierende Frist, vorgeseh
 Für die Sammelkarte wird der aktuelle Punktestand deinem Konto zugeordnet und ohne Ablaufdatum gespeichert. Dieser Stand enthält keine Liste von Einkäufen, Produkten, Zeitpunkten oder Verkaufspunkten. Buchungsbezogene Angaben zu Stempeln und Gratisgetränken werden zusammen mit den Einzelbuchungen nach 90 Tagen gelöscht. Bei der Löschung des Kontos wird auch der Sammelkartenstand gelöscht.
 KoSTbar speichert zusätzlich die Gesamtzahl der eingelösten Gratisgetränke ohne Ablaufdatum. Stornierte Gratisgetränke werden abgezogen. Das Kassen-Team kann beide Zähler pro Konto einsehen. Bei der Kontolöschung entfällt auch dieser Zähler.
 
+## Netzzugang der Terminals
+Für den Zugang zum internen WLAN verwendet jedes Terminal ein technisches Gerätekonto beim RADIUS-Dienst. Die WLAN-Zugangsdaten werden außerhalb von KoSTbar verwaltet und sind keinem Kassenkonto zugeordnet.
+
 ## Freiwilligkeit und deine Rechte
 Die digitale Teilnahme ist freiwillig. Für ein KoSTbar-Konto sind Name, Referat, die Zuordnung einer Karte und die Vergabe einer vierstelligen PIN erforderlich. Ohne diese Angaben bleibt die Barzahlung ohne KoSTbar-Konto möglich. Es gibt keine ausschließlich automatisierten Entscheidungen mit rechtlicher oder ähnlich erheblicher Wirkung.
 Die Bestätigung der Datenschutzerklärung dokumentiert, dass du die Hinweise zur Kenntnis genommen hast. Du kannst nach Maßgabe der DSGVO Auskunft, Berichtigung, Löschung, Einschränkung und Datenübertragbarkeit verlangen.

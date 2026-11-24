@@ -73,6 +73,7 @@ install -m 0644 reader.py card_types.py device.py kiosk_boot.py versions.py /opt
 install -m 0755 start-kiosk.sh /opt/kaffeekasse-terminal/
 install -m 0644 kaffeekasse-terminal-reader.service /etc/systemd/system/
 install -m 0644 49-kaffeekasse-pcsc.rules /etc/polkit-1/rules.d/
+install -D -m 0644 chromium-policy.json /etc/chromium/policies/managed/90-kostbar-kiosk.json
 origin=$(cd /opt/kaffeekasse-terminal && runuser -u kaffeekasse -- /usr/bin/python3 -B -c 'from device import Device; print(Device().settings["origin"])')
 instance_file=/etc/kaffeekasse-terminal/reader-instance
 if [ ! -e "$instance_file" ]; then

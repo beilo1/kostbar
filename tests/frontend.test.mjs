@@ -8,6 +8,7 @@ import {acceptsState, canExtendVisit, sessionViewChanged} from '../static/kiosk-
 import {keyboardMarkup, pinField} from '../static/kiosk-keyboard.js';
 import {loyaltyCardMarkup} from '../static/loyalty-card.js';
 import {shopMarkup} from '../static/shop-view.js';
+import {esc, personLabel} from '../static/shared.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const kiosk = fs.readFileSync(path.join(root, 'static/kiosk.js'), 'utf8');
@@ -202,6 +203,7 @@ test('admin journal shows escaped reversal details, the reason and the original 
   const script = section(admin, 'function historicalSites(', 'function editProduct(') +
     section(admin, 'function journalPanel(', 'function consentCell(');
   const rendered = vm.runInNewContext(script + '\njournalPanel();', context);
+  assert.match(rendered, /class="pill danger">Storno<\/span>/);
   assert.match(rendered, /Kaffee &lt;alt&gt;/);
   assert.match(rendered, /Grund &lt;b&gt;spät&lt;\/b&gt;/);
   assert.match(rendered, /Zu Kauf #1/);
@@ -210,29 +212,60 @@ test('admin journal shows escaped reversal details, the reason and the original 
   const expired = vm.runInNewContext(script + '\njournalPanel();', context);
   assert.match(expired, /Grund &lt;b&gt;spät&lt;\/b&gt;/);
   assert.doesNotMatch(expired, /Kaffee|Zu Kauf/);
+  context.journal.entries[0].kind = 'purchase';
+  context.journal.entries[0].reversed_by = 3;
+  context.kinds.purchase = 'Kauf';
+  assert.match(vm.runInNewContext(script + '\njournalPanel();', context), /class="pill good">Kauf<\/span>/);
 });
 
-test('admin people search shows stamp progress and redeemed totals for each account', () => {
+test('admin people search keeps separate account fields, card labels and loyalty totals', () => {
+  const loyalty = {stamps: 0, target: 10, redeemed: 0};
   const context = {
     overview: {people: [
-      {id: 1, first: 'Alicia', balance: 0, loyalty: {stamps: 4, target: 10, redeemed: 1}},
-      {id: 2, first: 'Bruno', balance: 0, loyalty: {stamps: 0, target: 10, redeemed: 0}},
-    ], card_types: {}, card_media: {}},
-    search: '', personLabel: p => p.first, personName: p => p.first, esc: String,
-    dateTime: () => '', amount: String, consentCell: () => '', rowAction: () => '', exportLink: () => '',
-    table: (labels, rows) => ({labels, rows}),
+      {id: 1, last: 'Ährens', first: 'Alicia', department: 'R 10', balance: -1000, card_medium: 'badge',
+        terms_current: true, consents: [{version: 'historical-policy-id'}],
+        loyalty: {stamps: 4, target: 10, redeemed: 1}},
+      {id: 2, last: 'Berg', first: 'Bruno', department: 'R 2', balance: 90, card_type: 'classic', loyalty},
+      {id: 3, last: 'Caro', first: 'Anna', department: 'R 3 <Nord>', balance: -90, card_type: 'classic',
+        card_medium: 'badge', loyalty},
+      {id: 4, last: 'Dorn', first: 'Dana', department: '', balance: 1000, loyalty},
+    ], card_types: {classic: 'MIFARE Classic'}, card_media: {badge: 'Dienstausweis'}},
+    search: '', personLabel, esc, peopleSort: {key: 'last', direction: 'ascending'},
+    dateTime: () => '', amount: String, rowAction: () => '', exportLink: () => '',
   };
-  const render = () => vm.runInNewContext(section(admin, 'function peopleRows()', 'function peoplePanel()') +
-    '\npeopleTable();', context);
+  const script = section(admin, 'const peopleSortKeys', 'let session') +
+    section(admin, 'function columnHeading(', 'function journalPanel(') +
+    section(admin, 'function consentCell(', 'function peoplePanel(');
+  const render = () => vm.runInNewContext('(() => {\n' + script + '\nreturn peopleTable();\n})()', context);
+  const ids = html => Array.from(html.matchAll(/Konto #(\d+)/g), match => Number(match[1]));
   const all = render();
-  assert.ok(all.labels.includes('Sammelkarte'));
-  assert.match(all.rows, /4\/10/);
-  assert.match(all.rows, /1 Gratisgetränk eingelöst/);
-  context.search = 'bruno';
+  assert.match(all, /class="consent-status"><span class="pill good">Bestätigt<\/span><\/td>/);
+  assert.match(all, /class="consent-status"><span class="pill off">Offen<\/span><\/td>/);
+  assert.doesNotMatch(all, /historical-policy-id|Frühere Bestätigungen/);
+  assert.match(all, /<th scope="col" aria-sort="ascending">\s*<button[^>]+data-people-sort="last">Name/);
+  assert.match(all, /<\/td>\s*<td>Alicia<\/td><td>R 10<\/td>/);
+  assert.match(all, /<td>R 3 &lt;Nord&gt;<\/td>/);
+  assert.match(all, /4\/10/);
+  assert.match(all, /1 Gratisgetränk eingelöst/);
+  assert.match(all, /Konto #1[^]*?<small>Dienstausweis<\/small>/);
+  assert.match(all, /Konto #2[^]*?<small>MIFARE Classic<\/small>/);
+  assert.match(all, /Konto #3[^]*?<small>Dienstausweis · MIFARE Classic<\/small>/);
+  assert.match(all, /Konto #4[^]*?<small>Kartentyp nicht bestimmt<\/small>/);
+  assert.equal((all.match(/Kartentyp nicht bestimmt/g) ?? []).length, 1);
+  for (const [key, expected] of Object.entries({last: [1, 2, 3, 4], first: [1, 3, 2, 4],
+    department: [4, 2, 3, 1], balance: [1, 3, 2, 4]})) {
+    context.peopleSort = {key, direction: 'ascending'};
+    assert.deepEqual(ids(render()), expected);
+    context.peopleSort.direction = 'descending';
+    assert.deepEqual(ids(render()), expected.toReversed());
+  }
+  assert.deepEqual(context.overview.people.map(p => p.id), [1, 2, 3, 4]);
+  context.search = 'bruno r 2';
   const filtered = render();
-  assert.match(filtered.rows, /0\/10/);
-  assert.match(filtered.rows, /0 Gratisgetränke eingelöst/);
-  assert.doesNotMatch(filtered.rows, /Alicia/);
+  assert.deepEqual(ids(filtered), [2]);
+  assert.match(filtered, /0\/10/);
+  assert.match(filtered, /0 Gratisgetränke eingelöst/);
+  assert.doesNotMatch(filtered, /Alicia/);
 });
 
 test('technical view shows cleanup failure and the last successful run', () => {

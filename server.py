@@ -86,11 +86,21 @@ KIOSK_PAIRING_NOTICE = (
     "Der Browser am Terminal speichert eine Gerätekennung als technisch notwendiges Cookie. "
     "Sie ordnet das Gerät dem Verkaufspunkt zu. Das Kassen-Team kann diese Zuordnung aufheben."
 )
-TERMINAL_WIFI_NOTICE = (
+LEGACY_TERMINAL_WIFI_NOTICE = (
     "Bei der Ersteinrichtung beziehen die Terminals Systemupdates über ein WLAN mit gemeinsamem Kennwort. "
     "Für den Produktivbetrieb melden sich die Raspberry Pis mit je einem Gerätezertifikat am internen WLAN an "
     "(WPA-Enterprise mit EAP-TLS). Ein zentraler RADIUS-Dienst prüft die Geräteanmeldung. "
     "Die Verbindung der Terminals zur Kasse läuft über HTTPS."
+)
+TERMINAL_WIFI_NOTICE = (
+    "Bei der Ersteinrichtung beziehen die Terminals Systemupdates über ein WLAN mit gemeinsamem Kennwort. "
+    "Im Betrieb melden sich die Raspberry Pis mit einem eigenen Benutzernamen und Passwort am internen Terminal-WLAN an "
+    "(WPA2-Enterprise mit PEAP/MSCHAPv2). Der RADIUS-Dienst prüft den Zugang. "
+    "Die Terminals prüfen das RADIUS-Serverzertifikat und verbinden sich über HTTPS mit der Kasse."
+)
+TERMINAL_WIFI_PRIVACY_NOTICE = (
+    "Für den Zugang zum internen WLAN verwendet jedes Terminal ein technisches Gerätekonto beim RADIUS-Dienst. "
+    "Die WLAN-Zugangsdaten werden außerhalb von KoSTbar verwaltet und sind keinem Kassenkonto zugeordnet."
 )
 KIOSK_TIMEOUT_NOTICE = (
     f"Am gemeinsam genutzten Terminal endet deine Sitzung nach {SESSION_IDLE} Sekunden ohne Eingabe. "
@@ -123,8 +133,8 @@ PIN_TERMS_NOTICE = (
 )
 TERMS_LIMIT = 16000
 DEFAULT_PRIVACY = {
-    "version": "vorlage-8",
-    "date": "2026-11-22",
+    "version": "vorlage-9",
+    "date": "2026-11-24",
     "template": True,
     "body": Path(__file__).with_name("privacy.md").read_text(encoding="utf-8").strip(),
 }
@@ -335,6 +345,7 @@ class App:
             for marker, heading, notice in (
                 ("loyalty_privacy_notice_v1", "Sammelkarte", LOYALTY_PRIVACY_NOTICE),
                 ("loyalty_admin_privacy_notice_v1", "Sammelkarte im Admin-Bereich", LOYALTY_ADMIN_PRIVACY_NOTICE),
+                ("terminal_wifi_privacy_notice_v1", "Netzzugang der Terminals", TERMINAL_WIFI_PRIVACY_NOTICE),
             ):
                 added = conn.execute("INSERT INTO settings (key,value) VALUES (%s,'1') ON CONFLICT DO NOTHING",
                                      (marker,)).rowcount
@@ -346,6 +357,11 @@ class App:
                                 "date": finance.local_date(data.now()).date().isoformat(), "body": privacy_body}
                 data.publish_privacy(conn, self.privacy, "System", previous)
             original_body = body = data.terms_body(self.terms)
+            added_wifi_update = conn.execute(
+                "INSERT INTO settings (key,value) VALUES ('terminal_wifi_notice_v2','1') ON CONFLICT DO NOTHING"
+            ).rowcount
+            if added_wifi_update:
+                body = body.replace(LEGACY_TERMINAL_WIFI_NOTICE, TERMINAL_WIFI_NOTICE)
             for marker, title, notices in (
                 ("card_storage_notice_v1", "Schutz deiner Ausweiskennung und Daten", (CARD_NOTICE, STORAGE_NOTICE)),
                 ("admin_login_notice_v1", "Schutz der Verwaltungszugänge", (ADMIN_LOGIN_NOTICE,)),
@@ -609,11 +625,12 @@ class App:
                        notice=None, until=monotonic() + SESSION_IDLE)
         self.advance_kiosk(session, account)
 
-    def state(self, terminal):
+    def state(self, terminal, *, include_catalog=False):
         session = terminal.kiosk
         policies = self.policy_documents()
         profile = None
         booking = None
+        catalog = None
         if session["stage"] in ("shop", "consent", "pin-setup"):
             with data.connect(self.db) as db:
                 account = self.account(db, person=session["user"], policies=policies)
@@ -627,6 +644,8 @@ class App:
                         booking = data.pending_kiosk_booking(db, session["user"])
                         if booking and booking["kind"] == "purchase":
                             booking["bonus"] = data.purchase_bonus(db, booking["entry"])
+                        if include_catalog and not booking:
+                            catalog = data.product_catalog(db, terminal.id)
         remaining = max(0, session["until"] - monotonic())
         result = {"stage": session["stage"], "notice": session["notice"], "visit": session["visit"],
                   "remaining": remaining, "terminal": terminal.label, "version": policies[0],
@@ -636,6 +655,8 @@ class App:
             result["profile"] = profile
         if booking:
             result["booking"] = booking
+        if catalog is not None:
+            result["catalog"] = catalog
         if session["stage"] == "receipt":
             result["receipt"] = session["receipt"]
         return result
@@ -771,7 +792,7 @@ class App:
                 with data.connect(self.db) as db:
                     return {"people": data.manual_people(db, search) if len(search) >= 2 else []}, None
             self.manual_login(terminal, body)
-            return self.state(terminal), None
+            return self.state(terminal, include_catalog=True), None
         if not isinstance(body.get("visit"), str) or body["visit"] != session["visit"]:
             raise data.Problem(409, "Die Sitzung hat gewechselt. Bitte melde dich erneut an.")
         if path == "/api/kiosk/logout":
@@ -1518,7 +1539,7 @@ class App:
 
     def catalog(self, terminal):
         with data.connect(self.db) as db:
-            return {"products": data.available_products(db, terminal.id), "categories": data.CATEGORIES}
+            return data.product_catalog(db, terminal.id)
 
     def route(self, terminal, method, path, query, body, cookies, caddy_version=None):
         if path.startswith("/api/admin/"):

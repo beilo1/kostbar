@@ -32,7 +32,7 @@ Die Screenshots zeigen ausschließlich fiktive Beispieldaten.
 | Je Terminal | USB-NFC-Leser und Karten | ACS ACR1552U-M1 im PC/SC-Modus, mit kompatiblen NFC-Karten oder Anhängern |
 | Optional je Terminal | Gehäuse und Halteschiene | 3D-gedruckter Standfuß und Displaygehäuse. Druckprofil und Montage stehen in der [Hardware-Anleitung](docs/HARDWARE.md). |
 
-NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine vertrauenswürdige HTTPS-Verbindung zum NAS. Die [Terminal-Anleitung](docs/TERMINALS.md) beschreibt auch WPA-Enterprise mit EAP-TLS.
+NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine vertrauenswürdige HTTPS-Verbindung zum NAS. Die [Terminal-Anleitung](docs/TERMINALS.md) beschreibt auch WPA2-Enterprise mit PEAP/MSCHAPv2, RADIUS-Gerätekonten und Prüfung des RADIUS-Serverzertifikats.
 
 ![Fotorealistische Visualisierung des KoSTbar-Terminals Pausenküche mit limettengrünem 3D-Druck-Gehäuse und USB-NFC-Leser](docs/images/terminal-render.jpg)
 
@@ -62,35 +62,27 @@ Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** 
 
 ### App-Image bereitstellen
 
-Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:38.0.1`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
+Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:40.0.2`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
 
 ```bash
-docker build --pull -t kostbar-app:38.0.1 .
-docker image save -o kostbar-app-38.0.1.tar kostbar-app:38.0.1
+docker build --pull -t kostbar-app:40.0.2 .
+docker image save -o kostbar-app-40.0.2.tar kostbar-app:40.0.2
 ```
 
 Die Tar-Datei je Zielsystem einmal importieren. Für die Erstinstallation müssen auch `postgres:17-bookworm` und `caddy:2-alpine` lokal geladen oder erreichbar sein.
 
 ```bash
-sudo docker image load -i kostbar-app-38.0.1.tar
-sudo docker image inspect kostbar-app:38.0.1 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+sudo docker image load -i kostbar-app-40.0.2.tar
+sudo docker image inspect kostbar-app:40.0.2 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
 ```
 
 Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jeweiligen `.env` setzen und im NAS-Unterordner `sudo docker compose -p kostbar pull app` ausführen. Eine Referenz mit Digest legt den Build eindeutig fest.
 
 ### Upgrade einer bestehenden Installation
 
-1. Das App-Image bauen oder importieren. Im bisherigen NAS-Unterordner die App stoppen und [Datenbank und Konfiguration sichern](docs/BETRIEB.md#sicherung-und-wiederherstellung).
-2. Die neuen Projektdateien übernehmen. Die private `.env`, `config/server.json`, Geräteprofile, Volumes und den Compose-Projektnamen weiterverwenden. Falls `KOSTBAR_APP_IMAGE` in `.env` gesetzt ist, die Referenz aktualisieren.
-3. Im NAS-Unterordner den App-Dienst starten und prüfen. Beispiel für den Projektnamen `kostbar`.
+Für eine laufende v39- oder v40-Instanz genügt es, auf das App-Image 40.0.2 zu wechseln. Die Schritte für QNAP und Synology sowie den Rückweg beschreibt [Update auf v40](docs/UPDATE-v40.md).
 
-   ```bash
-   sudo docker compose -p kostbar config --quiet &&
-   sudo docker compose -p kostbar up -d --no-deps --pull never app &&
-   sudo docker compose -p kostbar exec app python server.py schema-status
-   ```
-
-4. `/healthz`, Kiosk und Verwaltung prüfen. v38 verwendet dasselbe Schema wie v36 und v37. Beim Upgrade von v35 ergänzt die Anwendung Versionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
+Falls auf einem Terminal noch ein Pi-Installer vor v38.2 läuft, siehe [Terminal-Aktualisierung aus v38.2](docs/UPDATE-v38.2.md#3-bestehenden-raspberry-pi-aktualisieren). Beim Upgrade von v35 ergänzt die Anwendung weiterhin die Datenbankversionen 5 (`retired_terminals`) und 6 (`paypal_recipient`). Für eine Rückkehr zu v35 ist die vorher gesicherte Datenbank erforderlich.
 
 ## Entwicklung und Lizenz
 

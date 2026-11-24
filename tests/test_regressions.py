@@ -420,5 +420,53 @@ class InstallerPathTests(unittest.TestCase):
                     self.assertEqual(result.stdout.splitlines()[-2:], [str(p) for p in files])
 
 
+class KioskDesktopTests(unittest.TestCase):
+    def test_autostart_enables_native_touch_and_preserves_output_mapping(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            labwc = home / ".config/labwc"
+            labwc.mkdir(parents=True)
+            rc = labwc / "rc.xml"
+            original = ('<openbox_config xmlns="http://openbox.org/3.4/rc">\n'
+                        '  <!-- Keep the DSI mappings -->\n'
+                        '  <touch deviceName="Touch A" mapToOutput="DSI-2" mouseEmulation="yes"/>\n'
+                        '  <touch><deviceName>Touch B</deviceName><mouseEmulation>yes</mouseEmulation></touch>\n'
+                        '  <libinput><device category="touch"><calibrationMatrix>1 0 0 0 1 0</calibrationMatrix>'
+                        '</device></libinput>\n</openbox_config>\n')
+            rc.write_text(original, encoding="utf-8")
+            command = [sys.executable, str(ROOT / "pi/kiosk_boot.py"), "autostart", folder]
+            subprocess.run(command, check=True)
+            expected = original.replace('mouseEmulation="yes"', 'mouseEmulation="no"').replace(
+                '>yes</mouseEmulation>', '>no</mouseEmulation>')
+            updated = rc.read_text(encoding="utf-8")
+            self.assertEqual(updated.split("?>", 1)[1], expected)
+            self.assertEqual(rc.with_name("rc.xml.pre-kostbar-touch").read_text(encoding="utf-8"), original)
+            subprocess.run(command, check=True)
+            self.assertEqual(rc.read_text(encoding="utf-8"), updated)
+            self.assertEqual(rc.with_name("rc.xml.pre-kostbar-touch").read_text(encoding="utf-8"), original)
+
+    def test_autostart_hides_cursor_and_preserves_settings_on_reinstall(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            labwc = home / ".config/labwc"
+            labwc.mkdir(parents=True)
+            autostart = labwc / "autostart"
+            autostart.write_text("custom-start &\n", encoding="utf-8")
+            environment = labwc / "environment"
+            environment.write_text("XKB_DEFAULT_LAYOUT=de\nXCURSOR_THEME=PiXflat\n", encoding="utf-8")
+            command = [sys.executable, str(ROOT / "pi/kiosk_boot.py"), "autostart", folder]
+            subprocess.run([*command, "1.5"], check=True)
+            subprocess.run(command, check=True)
+            self.assertEqual(autostart.read_text(encoding="utf-8").splitlines(),
+                             ["custom-start &", "KIOSK_SCALE=1.5 /opt/kaffeekasse-terminal/start-kiosk.sh &"])
+            self.assertEqual(environment.read_text(encoding="utf-8").splitlines(),
+                             ["XKB_DEFAULT_LAYOUT=de", "XCURSOR_THEME=PiXflat", "XCURSOR_THEME=KoSTbar-Transparent"])
+            cursors = home / ".icons/KoSTbar-Transparent/cursors"
+            data = (cursors / "default").read_bytes()
+            self.assertEqual(data[:4], b"Xcur")
+            self.assertEqual(data[-4:], bytes(4))
+            self.assertEqual(data, (cursors / "left_ptr").read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

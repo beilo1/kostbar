@@ -19,7 +19,7 @@ function cardFace(stamps, target, {newStamps, startAt, dialog = false, spent = f
   }).join('');
 
   return `<div class="loyalty-face${spent ? ' loyalty-face-spent' : ' loyalty-face-current'}"${spent ? ' aria-hidden="true"' : ''}>
-    <div class="loyalty-card-head"><h2${dialog ? ' id="kiosk-dialog-title"' : ''}>Deine Sammelkarte</h2>
+    <div class="loyalty-card-head">${dialog ? '' : '<h2>Deine Sammelkarte</h2>'}
       <strong aria-label="${stamps} von ${target} Stempeln">${stamps} / ${target}</strong></div>
     <div class="loyalty-stamp-grid" aria-hidden="true">${slots}</div>
   </div>`;

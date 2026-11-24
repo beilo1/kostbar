@@ -87,7 +87,7 @@ Erwartet: `{"ok": true}`. Falls das NAS seine eigene gebundene LAN-IP nicht erre
 
 ## 5. Terminals einrichten
 
-Die Paketinstallation im PSK-WLAN und die Umstellung auf EAP-TLS nach der [Terminal-Anleitung](../docs/TERMINALS.md) durchführen. Den gemeinsamen Ordner `pi/` aus dem Hauptverzeichnis, die öffentliche `caddy-root.crt` und das passende Pi-Profil übertragen. Das bei der Installation erzeugte Profil für A liegt in `QNAP/config/terminal-a.json`. In **Verkauf → Verkaufspunkte** kannst du weitere Standorte anlegen und das jeweilige Profil herunterladen.
+Die Paketinstallation im PSK-WLAN und die Umstellung auf WPA2-Enterprise mit PEAP/MSCHAPv2 nach der [Terminal-Anleitung](../docs/TERMINALS.md) durchführen. Den gemeinsamen Ordner `pi/` aus dem Hauptverzeichnis, die öffentliche `caddy-root.crt` und das passende Pi-Profil übertragen. Das bei der Installation erzeugte Profil für A liegt in `QNAP/config/terminal-a.json`. In **Verkauf → Verkaufspunkte** kannst du weitere Standorte anlegen und das jeweilige Profil herunterladen.
 
 Der bekannte Zertifikatstest auf dem fertig eingerichteten Pi lautet:
 

@@ -34,6 +34,7 @@
 !pi/card_types.py
 !pi/versions.py
 !pi/install.sh
+!pi/kiosk_boot.py
 !static
 !static/**
 !licenses

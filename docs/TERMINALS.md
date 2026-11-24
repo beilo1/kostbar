@@ -17,49 +17,43 @@ sudo reboot
 
 Displaymontage und GPIO-Anschluss nur ohne Strom vornehmen. Die vorgesehene Displayausrichtung ist Querformat, Ausgang `DSI-2`, Drehung 270°. Der ACS ACR1252U wird ebenso wie ACR122U und ACR1552U vom mitgelieferten PC/SC-Zugriff berücksichtigt. Die tatsächlich verwendeten Karten an jedem eingerichteten Terminal testen.
 
-## 2. Produktives WLAN mit WPA-Enterprise und EAP-TLS einrichten
+## 2. Produktives WLAN mit WPA2-Enterprise und RADIUS einrichten
 
-Stelle die Terminals einzeln um. Nutze für den Wechsel die lokale Konsole vor der USBGuard-Sperre oder das eingebaute Ethernet. Beim Aktivieren des neuen WLAN-Profils kann eine laufende SSH-Sitzung über das Setup-WLAN abbrechen.
+Stelle die Terminals einzeln um und verwende Ethernet oder die lokale Konsole vor der USBGuard-Sperre. Beim Aktivieren des neuen Profils kann eine SSH-Sitzung über WLAN abbrechen. Ein bereits funktionierendes PEAP/MSCHAPv2-Profil kannst du beim Update weiterverwenden.
 
-Bei einem bereits eingerichteten Terminal mit den Paketen aus Schritt 1 kannst du hier beginnen. Danach den HTTPS-Test in Schritt 4 und den Neustarttest in Schritt 6 durchführen.
+### RADIUS und Terminal-VLAN vorbereiten
 
-### Werte und Zertifikate vorbereiten
-
-| Benötigt | Wert aus deiner Infrastruktur |
+| Einstellung | Vorgabe |
 | --- | --- |
-| Produktive SSID | WPA-Enterprise mit 802.1X und EAP-TLS. Der WLAN-Access-Point bzw. Controller leitet die Authentifizierung an RADIUS weiter. |
-| EAP-Identität | Vom RADIUS-Betrieb vorgegebene Identität für den Pi, ggf. mit Realm. |
-| Client-Zertifikat und privater Schlüssel | Ein Gerätezertifikat je Pi mit zugehörigem privatem Schlüssel, etwa als `.p12` / `.pfx` mit Passphrase oder als getrennte PEM-Dateien. Die PKI stellt ggf. die Zwischenzertifikate für die Client-Kette mit bereit. Liegt nur die öffentliche Zertifikatsdatei vor, bei der PKI das passende Schlüsselmaterial oder ein neues Gerätepaket anfordern. |
-| RADIUS-CA und Servername | CA-Zertifikat bzw. die freigegebene CA-Kette zur Prüfung des RADIUS-Serverzertifikats, dazu dessen erwarteter DNS-Name aus dem SAN. Beides über die zuständige PKI oder Netzwerkadministration beziehen. |
-| Produktives Netz | Das separate Terminal-VLAN mit IP-Konfiguration, internem DNS und dem vorgesehenen HTTPS-Zugriff auf das NAS. Für die Abnahme den SSH-Wartungsweg aus dem vorgesehenen Administrationsnetz prüfen. |
+| Produktive SSID | In UniFi bzw. auf dem WLAN-Controller WPA2-Enterprise und das RADIUS-Profil auswählen. Die SSID dem separaten Terminal-VLAN zuordnen. Falls RADIUS die VLAN-ID liefert, muss die Zuordnung zum vorgesehenen VLAN passen. |
+| RADIUS-Konto | Pro Terminal einen eigenen technischen Benutzernamen und ein eigenes Passwort hinterlegen. |
+| RADIUS-CA und Servername | Die vertrauenswürdige RADIUS-CA und den erwarteten exakten Namen aus der Netzwerkadministration beziehen. Den DNS-Namen aus dem SAN einsetzen. Wenn das Zertifikat keinen DNS-SAN enthält, prüft NetworkManager den Common Name (CN). Beim getesteten integrierten UniFi-RADIUS lautet der CN `UbiOS RADIUS Server Certificate`. |
+| Terminal-VLAN | DHCP, internes DNS, HTTPS zum NAS und den vorgesehenen SSH-Wartungsweg prüfen. |
 
-Die CA für die WLAN-Anmeldung gehört in das NetworkManager-Profil. Das HTTPS-Vertrauen für KoSTbar richtest du separat mit dem NAS-Geräteprofil und ggf. der NAS-CA ein.
+Die RADIUS-CA dient der WLAN-Anmeldung in NetworkManager. Für KoSTbar-HTTPS verwendest du das NAS-Geräteprofil und je nach Deployment die NAS-CA aus Schritt 3.
 
 ```bash
 systemctl is-active NetworkManager
 nmcli device status
 nmcli -f NAME,UUID,TYPE,DEVICE connection show --active
 timedatectl status
-install -d -m 0700 ~/kostbar-setup ~/kostbar-setup/eap-tls
 ```
 
-Die UUID des Setup-WLAN-Profils notieren. Prüfe die Systemzeit vor dem Wechsel, damit NetworkManager die Gültigkeit der Zertifikate korrekt prüfen kann. Übertrage die WLAN-Dateien über einen vertrauten administrativen Weg in den privaten Ordner. Im Beispiel heißen sie `radius-ca.pem` und `terminal.p12`. Eine `.pfx`-Datei kannst du unter demselben Zielnamen ablegen.
+Notiere die UUID des bisherigen WLAN-Profils und prüfe die Systemzeit. Übertrage die RADIUS-CA über einen vertrauenswürdigen Administrationsweg nach `~/kostbar-setup/`. Im Beispiel heißt sie `radius-ca.pem`. Vergleiche den SHA-256-Fingerabdruck mit dem von der Netzwerkadministration bestätigten Wert.
 
 ```bash
+openssl x509 -in ~/kostbar-setup/radius-ca.pem -noout -sha256 -fingerprint
 sudo install -d -o root -g root -m 0700 /etc/NetworkManager/kostbar
-sudo install -o root -g root -m 0600 ~/kostbar-setup/eap-tls/radius-ca.pem \
-  /etc/NetworkManager/kostbar/radius-ca.pem
-sudo install -o root -g root -m 0600 ~/kostbar-setup/eap-tls/terminal.p12 \
-  /etc/NetworkManager/kostbar/terminal.p12
-sudo openssl pkcs12 -in /etc/NetworkManager/kostbar/terminal.p12 -info -noout
+sudo install -o root -g root -m 0600 ~/kostbar-setup/radius-ca.pem \
+  /etc/NetworkManager/kostbar/peap-radius-ca.pem
 ```
 
-OpenSSL fragt die Passphrase interaktiv ab. Prüfe, dass das Paket ein Zertifikat und einen Schlüssel enthält. Bei getrennten PEM-Dateien im zweiten `install`-Aufruf stattdessen `terminal.crt` und anschließend `terminal.key` auf dieselbe Weise kopieren.
+### PEAP/MSCHAPv2-Profil anlegen
 
-### Systemweites WLAN-Profil anlegen
+Verwende beim Wechsel ein eigenes Profil, damit das bisherige WLAN als Rückweg verfügbar bleibt. Falls ein Profil namens `KoSTbar-UniFi` bereits existiert, wähle für das neue Profil einen anderen Dateinamen und verwende seine neue Profil-ID auch in den folgenden Befehlen. Das Beispiel geht von `wlan0` aus. Übernimm bei Bedarf den Schnittstellennamen aus `nmcli device status`.
 
 ```bash
-profile=/etc/NetworkManager/system-connections/KoSTbar-Produktiv.nmconnection
+profile=/etc/NetworkManager/system-connections/KoSTbar-UniFi.nmconnection
 cat /proc/sys/kernel/random/uuid
 sudo touch "$profile"
 sudo chown root:root "$profile"
@@ -67,11 +61,11 @@ sudo chmod 0600 "$profile"
 sudo nano --ignorercfiles "$profile"
 ```
 
-Trage die ausgegebene UUID, SSID, EAP-Identität und den exakten RADIUS-Servernamen ein. Bei einem vorhandenen Produktivprofil dessen UUID beibehalten. Das Beispiel verwendet `wlan0` und automatische IP-Konfiguration. Übernimm den Schnittstellennamen aus `nmcli device status`, falls er abweicht.
+Trage die erzeugte UUID, die SSID, den RADIUS-Benutzernamen und das Passwort ein. Setze `domain-match` auf den bestätigten exakten RADIUS-Servernamen. Das Beispiel verwendet den CN des bereits getesteten UniFi-Zertifikats. Setze `hidden=false` für eine sichtbare SSID.
 
 ```ini
 [connection]
-id=KoSTbar-Produktiv
+id=KoSTbar-UniFi
 uuid=HIER_ERZEUGTE_UUID_EINTRAGEN
 type=wifi
 interface-name=wlan0
@@ -80,20 +74,20 @@ autoconnect=false
 [wifi]
 mode=infrastructure
 ssid=PRODUKTIV-SSID
+hidden=true
 
 [wifi-security]
 key-mgmt=wpa-eap
 proto=rsn;
 
 [802-1x]
-eap=tls;
-identity=TERMINAL-IDENTITAET
-ca-cert=/etc/NetworkManager/kostbar/radius-ca.pem
-domain-match=radius.example.invalid
-client-cert=/etc/NetworkManager/kostbar/terminal.p12
-private-key=/etc/NetworkManager/kostbar/terminal.p12
-private-key-password=HIER_PKCS12_PASSPHRASE_EINTRAGEN
-private-key-password-flags=0
+eap=peap;
+identity=TERMINAL-BENUTZERNAME
+phase2-auth=mschapv2
+ca-cert=/etc/NetworkManager/kostbar/peap-radius-ca.pem
+domain-match=UbiOS RADIUS Server Certificate
+password=HIER_RADIUS_PASSWORT_EINTRAGEN
+password-flags=0
 
 [ipv4]
 method=auto
@@ -102,38 +96,34 @@ method=auto
 method=auto
 ```
 
-Bei mehreren freigegebenen RADIUS-Servernamen die vollständigen Namen mit Semikolons in `domain-match` aufzählen. Bei getrennten PEM-Dateien `client-cert` auf `terminal.crt` und `private-key` auf `terminal.key` ändern. Für einen verschlüsselten PEM-Schlüssel dessen Passphrase einsetzen. Für einen unverschlüsselten PEM-Schlüssel die Zeile `private-key-password` entfernen und die Flags auf `4` setzen.
+Für die automatische Anmeldung speichert NetworkManager das Passwort in der systemweiten, nur für root lesbaren Profildatei. Gib es direkt im Editor ein. Im Keyfile einen wörtlichen Backslash als `\\` und führende Leerzeichen als `\s` schreiben. Die Profildatei enthält Zugangsdaten und gehört in eine geschützte Sicherung.
 
-Das Profil speichert eine benötigte Passphrase für die automatische Anmeldung beim Boot im Klartext in der geschützten Root-Datei. Gib sie direkt im Editor ein. Einen wörtlichen Backslash als `\\` und führende Leerzeichen als `\s` eingeben. Profile, Schlüssel und Passphrasen vertraulich behandeln.
-
-Das Beispiel gilt für WPA-Enterprise mit `wpa-eap`. Falls der Controller WPA3-Enterprise im 192-Bit-Modus erzwingt, WLAN-Modus und Client-Unterstützung vor der Umstellung separat abgleichen.
-
-### Umschalten und nach Neustart prüfen
+### Verbindung und automatischen Start prüfen
 
 ```bash
 sudo nmcli connection load "$profile"
-sudo nmcli --wait 45 connection up id KoSTbar-Produktiv
+sudo nmcli --wait 45 connection up id KoSTbar-UniFi
 nmcli -f NAME,UUID,TYPE,DEVICE connection show --active
-nmcli device show wlan0
+nmcli -f GENERAL.CONNECTION,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS device show wlan0
 getent hosts kostbar.internal.lan
 ```
 
-Prüfe, dass `KoSTbar-Produktiv` am WLAN-Interface aktiv ist und RADIUS den Pi angenommen hat. Prüfe Erreichbarkeit und Namensauflösung aus dem produktiven WLAN. Für Synology den Namen aus dem Geräteprofil verwenden. Wenn zusätzlich Ethernet steckt, für die Abnahme den NAS- und SSH-Zugriff gezielt über das WLAN prüfen. Auf einem QNAP-Pi zeigt `ip route get 192.168.3.110` zum Beispiel die verwendete Schnittstelle. Ersetze die Beispiel-IP durch die LAN-IP deines NAS.
+Prüfe die IP-Adresse im vorgesehenen Terminal-VLAN und die erfolgreiche Anmeldung im RADIUS-Protokoll. Die Aktivierung ohne `--ask` bestätigt, dass das gespeicherte Passwort verwendet werden kann. Für Synology den NAS-Namen aus dem Geräteprofil verwenden. Bei gestecktem Ethernet die Route zum NAS prüfen, etwa mit `ip route get 192.168.3.110` für die QNAP-Beispiel-IP. Die Route für die WLAN-Abnahme muss über `wlan0` führen.
 
-Nach erfolgreichem Test die Startprofile setzen. Ersetze die Beispiel-UUID durch die notierte Setup-UUID.
+Wenn das neue Profil funktioniert, aktiviere dessen Autoconnect und deaktiviere ihn für das bisherige WLAN-Profil. Ersetze die Beispiel-UUID. Falls weitere WLAN-Profile beim Boot konkurrieren, prüfe auch deren Autoconnect-Einstellungen.
 
 ```bash
-setup_uuid='HIER-SETUP-PROFIL-UUID'
-sudo nmcli connection modify id KoSTbar-Produktiv connection.autoconnect yes
-sudo nmcli connection modify uuid "$setup_uuid" connection.autoconnect no
+previous_uuid='HIER-BISHERIGE-PROFIL-UUID'
+sudo nmcli connection modify id KoSTbar-UniFi connection.autoconnect yes
+sudo nmcli connection modify uuid "$previous_uuid" connection.autoconnect no
 sudo reboot
 ```
 
-Nach dem Neustart das aktive WLAN-Profil, den RADIUS-Erfolg und den SSH-Zugang ohne weitere Eingabe prüfen. Die private Zwischenkopie nach erfolgreicher Einrichtung vom Pi entfernen. Sobald auch der HTTPS-Test aus Schritt 4 gelingt, das Setup-Profil mit `sudo nmcli connection delete uuid "$setup_uuid"` entfernen, falls es für die Wartung nicht gebraucht wird. Nach einer neuen Anmeldung die Variable dazu erneut mit der notierten UUID setzen.
+Prüfe nach dem Neustart das aktive Profil, die VLAN-IP, den RADIUS-Erfolg und den SSH-Zugang. Führe anschließend den HTTPS-Test aus Schritt 4 durch. Entferne oder sperre das alte RADIUS-Gerätekonto erst nach erfolgreicher Abnahme, sofern es abgelöst wurde. Bei der Ablösung eines EAP-TLS-Profils das frühere Gerätezertifikat nach dem vorgesehenen PKI-Verfahren außer Betrieb nehmen.
 
-**Rückweg während der Einrichtung.** Über die lokale Konsole oder Ethernet `sudo nmcli connection modify id KoSTbar-Produktiv connection.autoconnect no` ausführen. Danach das noch gespeicherte Setup-Profil mit `sudo nmcli connection modify uuid "$setup_uuid" connection.autoconnect yes` und `sudo nmcli connection up uuid "$setup_uuid"` wieder aktivieren, sofern die Setup-SSID erreichbar ist. Bei einer abgelehnten WLAN-Anmeldung `sudo journalctl -b -u NetworkManager -u wpa_supplicant --no-pager -n 80` und das RADIUS-Protokoll prüfen. Typische Prüfpunkte sind Systemzeit, Zertifikatsablauf, CA-Kette, RADIUS-Servername und Zuordnung des Gerätezertifikats in der RADIUS-Richtlinie.
+**Rückweg während der Einrichtung.** Über Ethernet oder die lokale Konsole `sudo nmcli connection modify id KoSTbar-UniFi connection.autoconnect no` ausführen. Danach das bisherige Profil mit `sudo nmcli connection modify uuid "$previous_uuid" connection.autoconnect yes` und `sudo nmcli connection up uuid "$previous_uuid"` wieder aktivieren. Nach einer neuen Anmeldung die Variable erneut setzen. Bei Fehlern `sudo journalctl -b -u NetworkManager -u wpa_supplicant --no-pager -n 80` und das RADIUS-Protokoll prüfen. Typische Prüfpunkte sind Uhrzeit, CA-Kette, Servername, PEAP/MSCHAPv2, Zugangsdaten und VLAN-Zuordnung.
 
-[Raspberry Pi OS · Netzwerkverwaltung](https://www.raspberrypi.com/documentation/computers/configuration.html#networking) · [NetworkManager · Dateiformat](https://networkmanager.dev/docs/api/1.44.0/nm-settings-keyfile.html) · [NetworkManager · 802.1X-Einstellungen](https://networkmanager.dev/docs/api/latest/settings-802-1x.html)
+[Raspberry Pi OS · Netzwerkverwaltung](https://www.raspberrypi.com/documentation/computers/configuration.html#networking) · [NetworkManager · Dateiformat](https://networkmanager.dev/docs/api/latest/nm-settings-keyfile.html) · [NetworkManager · 802.1X-Einstellungen](https://networkmanager.dev/docs/api/latest/settings-802-1x.html)
 
 ## 3. Dateien übertragen und installieren
 
@@ -226,7 +216,7 @@ sudo reboot
 
 ### Grafischen Kiosk starten
 
-`pi/install.sh` richtet auf jedem Pi automatisch den unprivilegierten Desktopbenutzer `kiosk`, das LightDM-Autologin, den Boot in die grafische Oberfläche und den Chromium-Autostart in labwc ein. Der Kartenleser startet als Systemdienst. Nach der Installation neu starten:
+`pi/install.sh` richtet auf jedem Pi automatisch den unprivilegierten Desktopbenutzer `kiosk`, das LightDM-Autologin, den Boot in die grafische Oberfläche und den Chromium-Autostart in labwc ein. Ein transparentes Cursor-Theme blendet den Mauszeiger ab dem Start der grafischen Kiosk-Sitzung aus. labwc gibt native Touch-Ereignisse an Chromium weiter, damit die Anmeldung und das Scrollen mit dem Finger funktionieren. Der Kartenleser startet als Systemdienst. Nach der Installation neu starten:
 
 ```bash
 sudo reboot
@@ -238,7 +228,7 @@ Bei einem Neustart bleibt die Kopplung erhalten. Im laufenden Betrieb verlänger
 
 ### Verlorenen Pi ersetzen und Lesertoken wechseln
 
-1. Unter **Verkauf → Verkaufspunkte** die Zuordnung des betroffenen Geräts lösen. Das WLAN-Gerätezertifikat gemäß dem vorgesehenen PKI-Prozess sperren.
+1. Unter **Verkauf → Verkaufspunkte** die Zuordnung des betroffenen Geräts lösen. Das technische WLAN-Konto des betroffenen Terminals beim RADIUS-Dienst sperren.
 2. Einen neuen zufälligen Token erzeugen, etwa mit `openssl rand -hex 32`. In `config/server.json` unter `terminals` beim betroffenen Standort den Wert `token` ersetzen. Bei einem in der Verwaltung angelegten Standort ohne bisherigen Konfigurationseintrag dort seine vorhandene Kennung mit `label` und neuem `token` ergänzen. Der Eintrag für einen Standort namens `etage-2` sieht innerhalb von `terminals` so aus.
 
    ```json
@@ -256,7 +246,7 @@ Bei einem Neustart bleibt die Kopplung erhalten. Im laufenden Betrieb verlänger
    sudo docker compose -p kostbar ps app
    ```
 
-4. In der Verwaltung ein frisches Pi-Profil für den Standort herunterladen. Das Profil und ein eigenes WLAN-Gerätezertifikat auf dem Ersatz-Pi installieren und den Pi neu koppeln. Ältere Kopien des Profils enthalten noch den früheren Token.
+4. In der Verwaltung ein frisches Pi-Profil für den Standort herunterladen. Das Profil auf dem Ersatz-Pi installieren, ein eigenes RADIUS-Konto nach Schritt 2 einrichten und den Pi neu koppeln. Ältere Kopien des Profils enthalten noch den früheren Token.
 
 ### Autostart prüfen
 
@@ -266,11 +256,11 @@ Mit `sudo lightdm --show-config` lässt sich der wirksame Desktop-Autologin prü
 
 Der Launcher läuft bei jedem Start der grafischen Sitzung des Kiosk-Kontos. Er setzt `wlr-randr --output DSI-2 --transform 270` vor der ersten Verbindungsprüfung zum NAS. So wird die Drehung auch nach einem Neustart erneut angewendet. Bei einem abweichenden Anschlussnamen zeigt `wlr-randr` in der laufenden labwc-Sitzung den tatsächlichen Ausgang. Den Namen bei Bedarf in `pi/start-kiosk.sh` anpassen. Kann die Drehung nicht angewendet werden, läuft der Kioskstart weiter.
 
-Chromium verwendet mit `--password-store=basic` den einfachen Passwortspeicher für das KoSTbar-Kiosk-Profil. Damit entfällt der Keyring-Dialog beim Start.
+Chromium verwendet mit `--password-store=basic` den einfachen Passwortspeicher für das KoSTbar-Kiosk-Profil. Damit entfällt der Keyring-Dialog beim Start. Die Pflicht-Richtlinie `PasswordManagerEnabled=false` in `/etc/chromium/policies/managed/90-kostbar-kiosk.json` unterbindet die Passwort-Speicherabfrage für Chromium auf dem Terminal-Pi.
 
 
 Bei einer Neuinstallation mit leerer Datenbank jeden Pi mit dem neuen Geräteprofil und gegebenenfalls der neuen CA einrichten und neu koppeln. Bei einem Upgrade mit übernommener Datenbank und Konfiguration können die bestehenden Profile und Kopplungen weiterverwendet werden. Falls der Pi bei einer Neuinstallation keine Kopplung anbietet, Geräteprofil, NAS-Ziel, Dienststatus und gegebenenfalls eine bereits hinterlegte Zuordnung unter **Verkaufspunkte** prüfen.
 
 ## 6. Am echten Display abnehmen
 
-Nach einem vollständigen Neustart automatische WLAN-Anmeldung per EAP-TLS, den HTTPS-Zugriff aus dem produktiven WLAN sowie Orientierung und Touch an allen Ecken prüfen. Registrierung mit Vorname, Nachname, Referat einschließlich Ziffern sowie Zustimmungsfeld öffnen. Tastatur, Formular und Bestätigung müssen bei der gewählten Skalierung passen. Manuelle Anmeldung mit Groß- und Kleinbuchstaben testen. Nach 15 Sekunden ohne Eingabe muss die Sitzung enden; nach einem erfolgreichen Kauf beträgt die Anzeigezeit fünf Sekunden. Kartenleser nach Abziehen und erneutem Anstecken am freigegebenen Port prüfen. Danach die Schritte an jedem weiteren Pi wiederholen.
+Nach einem vollständigen Neustart die automatische WLAN-Anmeldung per PEAP/MSCHAPv2 und den HTTPS-Zugriff über das Terminal-VLAN prüfen. Vor der ersten Berührung kontrollieren, dass bereits beim Sitzungsstart kein Mauszeiger sichtbar ist. Danach die Orientierung und den Touch an allen Ecken prüfen. In Nutzungsbedingungen, Datenschutzerklärung, Produktliste und Warenkorb mit einem Finger wischen. Im PayPal-Dialog Betrag, Tastatur, QR-Code und Schaltfläche auf gleichzeitige Sichtbarkeit prüfen. Registrierung mit Vorname, Nachname, Referat einschließlich Ziffern sowie Zustimmungsfeld öffnen. Tastatur, Formular und Bestätigung müssen bei der gewählten Skalierung passen. Manuelle Anmeldung mit Groß- und Kleinbuchstaben testen. Nach 15 Sekunden ohne Eingabe muss die Sitzung enden; nach einem erfolgreichen Kauf beträgt die Anzeigezeit fünf Sekunden. Kartenleser nach Abziehen und erneutem Anstecken am freigegebenen Port prüfen. Danach die Schritte an jedem weiteren Pi wiederholen.

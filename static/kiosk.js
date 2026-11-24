@@ -172,13 +172,11 @@ function showTerms(privacy = false) {
 }
 
 termsLink.addEventListener('click', event => {
-  if (!state || state.stage === 'idle') return;
   event.preventDefault();
   showTerms();
 });
 
 privacyLink.addEventListener('click', event => {
-  if (!state || state.stage === 'idle') return;
   event.preventDefault();
   showTerms(true);
 });
@@ -341,8 +339,9 @@ function applyState(next) {
         requestKey = undefined;
         renderRecoveredBooking();
       } else {
+        if (next.catalog) catalog = next.catalog;
         renderShop();
-        updateCatalog().catch(error => notify(error.message));
+        if (!next.catalog) updateCatalog().catch(error => notify(error.message));
       }
     }
     if (next.stage === 'receipt') renderReceipt();
@@ -576,6 +575,11 @@ timeoutDialog.querySelector('[data-resume]').addEventListener('click', async () 
   }
 });
 document.addEventListener('click', event => {
+  const close = event.target.closest('[data-close-dialog]');
+  if (close) {
+    close.closest('dialog').close();
+    return;
+  }
   if (event.target.closest('[data-privacy-link]')) {
     event.preventDefault();
     showTerms(true);
