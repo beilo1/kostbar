@@ -324,6 +324,8 @@ function applyState(next) {
     if (timeoutDialog.open) timeoutDialog.close();
     userDialog.close();
     if (termsDialog.open) termsDialog.close();
+    const projectDialog = document.getElementById('project-dialog');
+    if (projectDialog?.open) projectDialog.close();
     if (next.stage === 'idle') renderIdle();
     if (next.stage === 'manual') {
       renderIdle();

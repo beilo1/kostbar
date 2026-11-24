@@ -3,6 +3,7 @@ import { downloadPrintDocument, termsPrintDate } from './print-export.js';
 import { technicalPanel } from './technical-docs.js';
 import { categoryIcons, icon } from './art.js';
 import { api, dateTime, esc, euro, eurosToCents, idempotencyKey, notify, personLabel } from './shared.js';
+import { columnHeading, table } from './ui-table.js';
 
 const admin = document.getElementById('admin');
 const top = document.getElementById('top-actions');
@@ -199,16 +200,6 @@ function amount(cents) {
   return `<span class="amount ${cents < 0 ? 'negative' : ''}">${euro(cents)}</span>`;
 }
 
-function columnHeading(label) {
-  return `<th scope="col">${label}</th>`;
-}
-
-function table(labels, rows, empty, heading = columnHeading) {
-  if (!rows) return `<p class="admin-empty">${empty}</p>`;
-  return '<div class="table-wrap"><table><thead><tr>' + labels.map(heading).join('') +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
-}
-
 function journalPanel() {
   const rows = journal.entries.map(j => {
     const items = j.items.flatMap(item => {
@@ -252,30 +243,42 @@ function peopleHeading(label) {
   </th>`;
 }
 
+function accountActions(person) {
+  const id = person.id;
+  const actions = [
+    rowAction('book', id, 'Buchung', 'plus', 'good'),
+    rowAction('person', id, 'Bearbeiten', 'edit'),
+    !person.closed_at && rowAction('capture', id, 'Karte ersetzen', 'card', 'info'),
+    rowAction('show', id, 'Verlauf', 'history'),
+    exportLink('export-account?person=' + id, 'Export', 'Kontoauszug als Excel-Datei'),
+    person.manual_enabled && rowAction('reset-pin', id, 'PIN zurücksetzen', 'key', 'warn', 'PIN zurücksetzen'),
+    !person.closed_at && rowAction('close-account', id, 'Konto schließen', 'close', 'danger'),
+  ].filter(Boolean);
+  const middle = Math.ceil(actions.length / 2);
+  const rows = [actions.slice(0, middle), actions.slice(middle)];
+  return `<div class="account-action-rows">${rows.map(row =>
+    `<div class="action-list account-action-row">${row.join('')}</div>`).join('')}</div>`;
+}
+
 function peopleRows() {
   return peopleView.people.map(p => {
     const medium = peopleView.card_media[p.card_medium];
     const type = peopleView.card_types[p.card_type];
-    return `<tr><td><strong>${esc(p.last)}</strong><small>Konto #${p.id} · seit ${dateTime(p.created)}</small>
-    <small>${esc(medium || type || 'Kartentyp nicht bestimmt')}${medium && type ? ' · ' + esc(type) : ''}</small></td>
-    <td>${esc(p.first)}</td><td>${esc(p.department || '—')}</td>
+    return `<tr><td><strong>${esc(p.last)}</strong></td><td><strong>${esc(p.first)}</strong></td>
+    <td>${esc(p.department || '—')}</td>
     <td><span class="pill ${p.active ? 'good' : 'off'}">${p.closed_at ? 'Geschlossen' : p.active ? 'Aktiv' : 'Gesperrt'}</span></td>
     <td class="num">${amount(p.balance)}</td>
     <td><strong>${p.loyalty.stamps}/${p.loyalty.target}</strong>
       <small>${p.loyalty.redeemed} ${p.loyalty.redeemed === 1 ? 'Gratisgetränk' : 'Gratisgetränke'} eingelöst</small></td>
-    <td class="consent-status">${consentCell(p)}</td><td class="row-actions"><div class="action-list">
-      ${rowAction('book', p.id, 'Buchung', 'plus', 'good')}
-      ${rowAction('person', p.id, 'Bearbeiten', 'edit')}
-      ${p.closed_at ? '' : rowAction('capture', p.id, 'Karte ersetzen', 'card', 'info')}
-      ${p.closed_at ? '' : rowAction('close-account', p.id, 'Konto schließen', 'close', 'danger')}
-      ${rowAction('show', p.id, 'Verlauf', 'history')}
-      ${exportLink('export-account?person=' + p.id, 'Export', 'Kontoauszug als Excel-Datei')}
-      ${p.manual_enabled ? rowAction('reset-pin', p.id, 'PIN zurücksetzen', 'key', 'warn', 'PIN zurücksetzen') : ''}</div></td></tr>`;
+    <td class="consent-status">${consentCell(p)}</td>
+    <td class="row-actions">${accountActions(p)}</td>
+    <td class="account-details"><strong>Konto #${p.id}</strong><small>Seit ${dateTime(p.created)}</small>
+    <small>${esc(medium || type || 'Kartentyp nicht bestimmt')}${medium && type ? ' · ' + esc(type) : ''}</small></td></tr>`;
   }).join('');
 }
 
 function peopleTable() {
-  return table(['Name', 'Vorname', 'Referat', 'Status', 'Saldo', 'Sammelkarte', 'Zustimmung', 'Aktionen'],
+  return table(['Name', 'Vorname', 'Referat', 'Status', 'Saldo', 'Sammelkarte', 'Zustimmung', 'Aktionen', 'Kontodetails'],
     peopleRows(), 'Keine passenden Konten.', peopleHeading);
 }
 

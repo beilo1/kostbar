@@ -66,7 +66,7 @@ export function createKioskDialog({state, apply, book, cancelManual, request = a
     close();
     show('Ohne Ausweis anmelden',
       `<div class="manual-search-info">
-        <label>Name oder Referat suchen<input id="manual-query" type="text" inputmode="none" maxlength="120"
+        <label class="kiosk-entry-label">Name oder Referat suchen<input id="manual-query" type="text" inputmode="none" maxlength="120"
           autocomplete="off" placeholder="Gib mindestens zwei Zeichen ein"></label>
         <div id="manual-results" class="manual-results" aria-live="polite"></div>
         ${errors()}

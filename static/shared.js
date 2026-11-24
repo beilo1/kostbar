@@ -46,15 +46,3 @@ export function eurosToCents(value) {
   const [whole, part = ''] = clean.replace(/^[+-]/, '').split(/[,.]/);
   return (clean.startsWith('-') ? -1 : 1) * (Number(whole) * 100 + Number(part.padEnd(2, '0')));
 }
-
-const copyrightYear = globalThis.document?.getElementById('copyright-year');
-if (copyrightYear) {
-  const firstYear = 2026;
-  const yearFormat = new Intl.DateTimeFormat('de-DE', {year: 'numeric', timeZone: 'Europe/Berlin'});
-  const updateCopyrightYear = () => {
-    const year = Number(yearFormat.format(new Date()));
-    copyrightYear.textContent = year > firstYear ? String(firstYear) + '-' + year : String(firstYear);
-  };
-  updateCopyrightYear();
-  setInterval(updateCopyrightYear, 60_000);
-}

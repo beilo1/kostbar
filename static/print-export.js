@@ -1,5 +1,6 @@
 import { esc } from './shared.js';
 import { formattedTerms, projectNotice, standLabel } from './terms.js';
+import { PROJECT_QR } from './site-chrome.js';
 
 const documents = {
   terms: {title: 'Nutzungshinweise', filename: 'KoSTbar-Nutzungshinweise-A4.html'},
@@ -50,7 +51,7 @@ export function renderPrintDocument(template, {kind, text, date, projectQr}) {
 export async function downloadPrintDocument(data) {
   const [template, qr] = await Promise.all([
     fetch('/static/print-document.html', {signal: AbortSignal.timeout(5000)}),
-    data.kind === 'terms' ? fetch('/static/project-qr.svg', {signal: AbortSignal.timeout(5000)}) : null,
+    data.kind === 'terms' ? fetch(PROJECT_QR, {signal: AbortSignal.timeout(5000)}) : null,
   ]);
   if (!template.ok || (qr && !qr.ok)) throw new Error('Die Druckvorlage konnte nicht geladen werden.');
   const {filename, html} = renderPrintDocument(await template.text(), {...data, projectQr: await qr?.text()});

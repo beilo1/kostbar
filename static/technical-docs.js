@@ -1,4 +1,5 @@
 import {dateTime, esc} from './shared.js';
+import {table as renderTable} from './ui-table.js';
 
 const purpose = {
   chromium: 'Kiosk-Browser', python3: 'Laufzeit des Leserdiensts', 'python3-pyscard': 'PC/SC-Anbindung in Python',
@@ -17,8 +18,7 @@ const areas = {
 };
 
 function table(headers, rows) {
-  return `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return renderTable(headers, rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join(''));
 }
 
 const box = (title, detail) => `<div><strong>${title}</strong><small>${detail}</small></div>`;

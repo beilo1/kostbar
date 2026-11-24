@@ -9,6 +9,8 @@ import {keyboardMarkup, pinField} from '../static/kiosk-keyboard.js';
 import {loyaltyCardMarkup} from '../static/loyalty-card.js';
 import {shopMarkup} from '../static/shop-view.js';
 import {esc} from '../static/shared.js';
+import {mountProjectFooter, PROJECT_URL} from '../static/site-chrome.js';
+import {columnHeading, table} from '../static/ui-table.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const kiosk = fs.readFileSync(path.join(root, 'static/kiosk.js'), 'utf8');
@@ -39,6 +41,7 @@ function timerContext(stage, seconds) {
 }
 
 test('masked PIN fields and touch keypad accept four digits including zero', () => {
+  assert.match(pinField('pin', 'Vierstellige PIN'), /class="kiosk-entry-label">Vierstellige PIN/);
   assert.match(pinField('pin', 'PIN'), /type="password"/);
   assert.match(pinField('pin_confirmation', 'PIN bestätigen'), /name="pin_confirmation"/);
   assert.match(pinField('pin', 'PIN'), /pattern="\[0-9\]\{4\}"/);
@@ -227,7 +230,7 @@ test('admin people renders the server page in order and keeps account fields and
   const context = {
     peopleView: {people: [
       {id: 1, last: 'Ährens', first: 'Alicia', department: 'R 10', balance: -1000, card_medium: 'badge',
-        terms_current: true, consents: [{version: 'historical-policy-id'}],
+        terms_current: true, manual_enabled: true, consents: [{version: 'historical-policy-id'}],
         loyalty: {stamps: 4, target: 10, redeemed: 1}},
       {id: 2, last: 'Berg', first: 'Bruno', department: 'R 2', balance: 90, card_type: 'classic', loyalty},
       {id: 3, last: 'Caro', first: 'Anna', department: 'R 3 <Nord>', balance: -90, card_type: 'classic',
@@ -235,10 +238,11 @@ test('admin people renders the server page in order and keeps account fields and
       {id: 4, last: 'Dorn', first: 'Dana', department: '', balance: 1000, loyalty},
     ], card_types: {classic: 'MIFARE Classic'}, card_media: {badge: 'Dienstausweis'}},
     esc, peopleSort: {key: 'last', direction: 'ascending'},
-    dateTime: () => '', amount: String, rowAction: () => '', exportLink: () => '',
+    columnHeading, table, dateTime: () => '', amount: String,
+    rowAction: action => `<button data-test-action="${action}"></button>`,
+    exportLink: () => '<button data-test-action="export"></button>',
   };
   const script = section(admin, 'const peopleSortKeys', 'let session') +
-    section(admin, 'function columnHeading(', 'function journalPanel(') +
     section(admin, 'function consentCell(', 'function peoplePanel(');
   const render = () => vm.runInNewContext('(() => {\n' + script + '\nreturn peopleTable();\n})()', context);
   const ids = html => Array.from(html.matchAll(/Konto #(\d+)/g), match => Number(match[1]));
@@ -247,7 +251,12 @@ test('admin people renders the server page in order and keeps account fields and
   assert.match(all, /class="consent-status"><span class="pill off">Offen<\/span><\/td>/);
   assert.doesNotMatch(all, /historical-policy-id|Frühere Bestätigungen/);
   assert.match(all, /<th scope="col" aria-sort="ascending">\s*<button[^>]+data-people-sort="last">Name/);
-  assert.match(all, /<\/td>\s*<td>Alicia<\/td><td>R 10<\/td>/);
+  assert.match(all, /<td><strong>Ährens<\/strong><\/td><td><strong>Alicia<\/strong><\/td>\s*<td>R 10<\/td>/);
+  assert.match(all, /<th scope="col">Aktionen<\/th><th scope="col">Kontodetails<\/th>/);
+  const groups = Array.from(all.matchAll(/class="action-list account-action-row">([^]*?)<\/div>/g),
+    match => Array.from(match[1].matchAll(/data-test-action="([^"]+)"/g), action => action[1]));
+  assert.deepEqual(groups.slice(0, 2), [['book', 'person', 'capture', 'show'], ['export', 'reset-pin', 'close-account']]);
+  assert.match(all, /<td class="account-details"><strong>Konto #1<\/strong>/);
   assert.match(all, /<td>R 3 &lt;Nord&gt;<\/td>/);
   assert.match(all, /4\/10/);
   assert.match(all, /1 Gratisgetränk eingelöst/);
@@ -265,6 +274,48 @@ test('admin people renders the server page in order and keeps account fields and
   assert.match(page, /0\/10/);
   assert.match(page, /0 Gratisgetränke eingelöst/);
   assert.doesNotMatch(page, /Alicia/);
+});
+
+test('the shared footer opens the repository dialog and keeps the Berlin copyright year', t => {
+  const year = {};
+  const trigger = new EventTarget();
+  const close = new EventTarget();
+  const dialog = new EventTarget();
+  dialog.setAttribute = () => {};
+  dialog.querySelector = () => close;
+  dialog.showModal = () => { dialog.open = true; };
+  dialog.close = () => { dialog.open = false; dialog.dispatchEvent(new Event('close')); };
+  let focused = false;
+  trigger.focus = () => { focused = true; };
+  const footer = {
+    querySelector: selector => selector === 'button' ? trigger : year,
+    ownerDocument: {createElement: () => dialog, body: {append: element => assert.equal(element, dialog)}},
+  };
+  let update;
+  t.mock.method(globalThis, 'setInterval', callback => { update = callback; });
+  t.mock.timers.enable({apis: ['Date'], now: new Date('2026-12-31T22:59:59Z')});
+  mountProjectFooter(footer);
+  assert.equal(year.textContent, '2026');
+  t.mock.timers.tick(1000);
+  update();
+  assert.equal(year.textContent, '2026-2027');
+  assert.match(footer.innerHTML, /aria-haspopup="dialog"[^>]*>beilo1\/kostbar/);
+  assert.ok(dialog.innerHTML.includes(`href="${PROJECT_URL}"`));
+  assert.match(dialog.innerHTML, /src="\/static\/project-qr.svg"/);
+  trigger.dispatchEvent(new Event('click'));
+  assert.equal(dialog.open, true);
+  close.dispatchEvent(new Event('click'));
+  assert.equal(dialog.open, false);
+  assert.equal(focused, true);
+});
+
+test('the public legal pages both return to the same kiosk page', () => {
+  for (const page of ['terms', 'privacy']) {
+    const html = fs.readFileSync(path.join(root, 'static', page + '.html'), 'utf8');
+    assert.match(html, /href="\/">Zurück zur Kasse<\/a>/);
+    assert.match(html, /data-project-footer/);
+    assert.doesNotMatch(html, /INFORMATION ZUR KoSTbar/);
+  }
 });
 
 test('admin loads only the active panel and passes the reversal filter to the journal cursor', async () => {

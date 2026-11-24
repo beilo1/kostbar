@@ -31,25 +31,25 @@
       <a id="terms-link" href="/terms">Nutzungsbedingungen</a>
       <a id="privacy-link" href="/privacy">Datenschutzerklärung</a>
     </nav>
-    <span>© <span id="copyright-year">2026</span> | beilo1</span>
+    <span class="project-footer" data-project-footer></span>
   </footer>
-  <dialog id="kiosk-dialog" aria-labelledby="kiosk-dialog-title">
-    <header class="kiosk-dialog-header">
+  <dialog id="kiosk-dialog" class="panel-dialog" aria-labelledby="kiosk-dialog-title">
+    <header class="dialog-header">
       <h2 id="kiosk-dialog-title"></h2>
       <button class="button outline dialog-close" type="button" data-close-dialog aria-label="Fenster schließen">
         <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
       </button>
     </header>
-    <div id="kiosk-dialog-content"></div>
+    <div id="kiosk-dialog-content" class="dialog-content"></div>
   </dialog>
-  <dialog id="terms-dialog" aria-labelledby="terms-title">
-    <header class="kiosk-dialog-header">
+  <dialog id="terms-dialog" class="panel-dialog" aria-labelledby="terms-title">
+    <header class="dialog-header">
       <h2 id="terms-title">Nutzungsbedingungen</h2>
       <button class="button outline dialog-close" type="button" data-close-dialog aria-label="Fenster schließen">
         <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
       </button>
     </header>
-    <div id="terms-dialog-content" role="region" aria-label="Dokumenttext" tabindex="0" autofocus></div>
+    <div id="terms-dialog-content" class="dialog-content" role="region" aria-label="Dokumenttext" tabindex="0" autofocus></div>
   </dialog>
   <dialog id="timeout-dialog" aria-labelledby="timeout-title" aria-describedby="timeout-description">
     <button class="button outline dialog-close" type="button" data-logout aria-label="Fenster schließen und abmelden">

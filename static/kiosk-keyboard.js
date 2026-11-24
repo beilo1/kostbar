@@ -3,7 +3,7 @@ const rows = ['1234567890', 'qwertzuiopü', 'asdfghjklöä', 'yxcvbnmß-.'];
 const pinRows = ['123', '456', '789', '0'];
 
 export function pinField(name, label) {
-  return `<label>${label}<input type="password" name="${name}" inputmode="none" pattern="[0-9]{4}"
+  return `<label class="kiosk-entry-label">${label}<input type="password" name="${name}" inputmode="none" pattern="[0-9]{4}"
     minlength="4" maxlength="4" autocomplete="off" required></label>`;
 }
 
