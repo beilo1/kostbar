@@ -52,11 +52,11 @@ Auf GitHub unter **Pull requests → New pull request** `base: main` und `compar
 
 ### 2.1 App-Image separat bauen
 
-In QNAP File Station das Quellcode-ZIP in einen neuen Ordner hochladen und dort entpacken, zum Beispiel in `/share/Kaffeekasse/kostbar-40.1.0-rc.1-src`. Der Build-Ordner enthält direkt das `Dockerfile`. Der bestehende QNAP-Compose-Ordner liegt separat. Auf dem NAS per SSH ausführen und den Beispielpfad sowie den Commit-Hash ersetzen.
+In QNAP File Station das Quellcode-ZIP in einen neuen Ordner hochladen und dort entpacken, zum Beispiel in `/share/docker/kostbar-40.1.0-rc.1-src`. Das `Dockerfile` liegt direkt in diesem Build-Ordner. Die bestehende Installation liegt unter `/share/docker/kostbar`. Auf dem NAS per SSH ausführen und den Commit-Hash sowie bei Bedarf den Build-Pfad ersetzen.
 
 ```bash
 rc_commit='VOLLSTAENDIGEN_COMMIT_HASH_EINTRAGEN'
-cd /share/Kaffeekasse/kostbar-40.1.0-rc.1-src &&
+cd /share/docker/kostbar-40.1.0-rc.1-src &&
 test -f Dockerfile &&
 test "${#rc_commit}" -eq 40 &&
 grep -F 'org.opencontainers.image.version="40.1.0-rc.1"' Dockerfile &&
@@ -80,11 +80,11 @@ sudo docker inspect kostbar-app-1 --format \
   'Ordner={{index .Config.Labels "com.docker.compose.project.working_dir"}} Dateien={{index .Config.Labels "com.docker.compose.project.config_files"}} Image={{.Config.Image}}'
 ```
 
-Bei dir sollte das produktive App-Image v40.0.2 angezeigt werden. Falls Container oder Projekt anders heißen, den tatsächlichen Namen verwenden. In den gefundenen **bisherigen** Arbeitsordner wechseln. In den Beispielen ist das der vorhandene Unterordner `QNAP/` oder `Synology/`. Bei einem Deployment mit zusätzlichen `-f`-Dateien oder `--env-file` diese bei allen Compose-Befehlen entsprechend ergänzen und die betreffenden Dateien ebenfalls sichern.
+Bei dir sollte das produktive App-Image v40.0.2 angezeigt werden. Falls Container oder Projekt anders heißen, den tatsächlichen Namen verwenden. Im QNAP-Beispiel liegt die Compose-Datei unter `/share/docker/kostbar/QNAP`. Zeigt `docker inspect` einen anderen Arbeitsordner an, verwende den angezeigten Pfad. Bei Synology in den angezeigten `Synology/`-Ordner wechseln. Bei einem Deployment mit zusätzlichen `-f`-Dateien oder `--env-file` diese bei allen Compose-Befehlen entsprechend ergänzen und die betreffenden Dateien ebenfalls sichern.
 
 ```bash
 project=kostbar
-cd /PFAD/ZUM/BESTEHENDEN/QNAP &&
+cd /share/docker/kostbar/QNAP &&
 pwd &&
 sudo docker compose version &&
 sudo docker compose -p "$project" ps &&

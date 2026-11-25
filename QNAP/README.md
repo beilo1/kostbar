@@ -1,6 +1,6 @@
 # QNAP TVS-872XT mit QTS – Neuinstallation
 
-Container Station und Docker Compose müssen vorhanden sein. Per SSH mit deinem Wartungskonto arbeiten. **Den gesamten Projektordner** auf das NAS kopieren, beispielsweise nach `/share/Kaffeekasse/kostbar`; darin müssen unter anderem `configure.py`, `compose.common.yml`, `pi/` und `QNAP/` liegen.
+Container Station und Docker Compose müssen vorhanden sein. Per SSH mit deinem Wartungskonto arbeiten. Für eine Neuinstallation **den gesamten Projektordner** nach `/share/docker/kostbar` kopieren. Darin müssen unter anderem `configure.py`, `compose.common.yml`, `pi/` und `QNAP/` liegen.
 
 Bei einer laufenden Installation den [Update-Ablauf mit Datensicherung und Rückweg](../docs/UPDATE-v40.1.md) verwenden. Die folgenden Schritte richten eine neue Instanz ein.
 
@@ -19,7 +19,7 @@ Dem NAS die feste LAN-IP `192.168.3.110` zuweisen und den internen DNS-Eintrag `
 Auf dem NAS wird kein lokal installiertes Python benötigt. Im Hauptordner ausführen:
 
 ```bash
-cd /share/Kaffeekasse/kostbar
+cd /share/docker/kostbar
 sudo docker compose version
 sudo docker run --rm \
   --user "$(id -u):$(id -g)" \
@@ -41,7 +41,7 @@ Erzeugt werden **QNAP/.env**, **QNAP/config/server.json** und ein privates Gerä
 Zuerst das [gemeinsame App-Image bereitstellen](../README.md#app-image-bereitstellen). Danach im QNAP-Unterordner arbeiten.
 
 ```bash
-cd /share/Kaffeekasse/kostbar/QNAP
+cd /share/docker/kostbar/QNAP
 sudo chmod 600 .env config/server.json
 sudo chown 10001:10001 config/server.json
 sudo chmod 755 ../nas/init-db.sh
