@@ -315,6 +315,10 @@ input:not([type=checkbox]), select { width: 100%; min-height: 45px; min-width: 0
 .tech-api-group { margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; }
 .tech-api-group summary { padding: 12px; cursor: pointer; font-weight: 700; }
 .tech-api-group .table-wrap { padding: 0 10px 8px; }
+.tech-status-codes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 8px; max-width: 850px; margin: 0; }
+.tech-status-codes > div { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.tech-status-codes dt code { display: inline-block; padding: 2px 5px; border-radius: 5px; background: var(--soft); font-weight: 700; }
+.tech-status-codes dd { margin: 0; }
 @media (max-width: 760px) {
   .tech-flow, .tech-steps { grid-template-columns: 1fr; }
   .tech-arrow span { display: inline-block; transform: rotate(90deg); }
@@ -451,9 +455,10 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .project-notice p { line-height: 1.55; overflow-wrap: anywhere; }
 .project-notice p + p { margin-top: 5px; }
 .project-notice a, .project-license summary { color: var(--deep); text-underline-offset: 3px; }
-.project-license { margin-top: 10px; }
+.project-license { flex: 1 0 100%; min-width: 0; }
 .project-license summary { cursor: pointer; text-decoration: underline; }
-.project-license-content pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.5 var(--text-font); }
+.project-license-content { display: grid; gap: 10px; margin-top: 10px; font-size: .9rem; }
+.project-notice .project-license-content p { margin: 0; }
 .project-qr { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
 #terms-dialog { width: min(920px, calc(100vw - 30px)); max-height: min(85dvh, 800px); }
 #project-dialog { width: min(650px, calc(100vw - 30px)); max-height: 90dvh; }

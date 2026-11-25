@@ -106,7 +106,17 @@ function apiReference(operations) {
       ${table(['Methode und Pfad', 'Zugriff', 'Zweck', 'Eingaben'], operations.filter(row => scopes.includes(row[2])).map(([method, path, scope, use, fields]) =>
         [`<span class="pill ${method === 'POST' ? 'good' : ''}">${esc(method)}</span> <code>${esc(path)}</code>`, esc(scope), esc(use), `<code>${esc(fields)}</code>`]))}
     </details>`).join('')}
-    <p><strong>Statuscodes</strong> 400 ungültige Eingabe, 401 fehlende oder abgelaufene Sitzung, 403 fehlende Berechtigung oder unzulässige Origin, 404 unbekannte Ressource, 405 falsche Methode, 409 Konflikt, 429 Anmeldeversuche begrenzt, 503 Dienst vorübergehend nicht verfügbar.</p>
+    <h4>Statuscodes</h4>
+    <dl class="tech-status-codes">
+      <div><dt><code>400</code></dt><dd>Ungültige Eingabe</dd></div>
+      <div><dt><code>401</code></dt><dd>Fehlende oder abgelaufene Sitzung</dd></div>
+      <div><dt><code>403</code></dt><dd>Fehlende Berechtigung oder unzulässige Origin</dd></div>
+      <div><dt><code>404</code></dt><dd>Unbekannte Ressource</dd></div>
+      <div><dt><code>405</code></dt><dd>Falsche Methode</dd></div>
+      <div><dt><code>409</code></dt><dd>Konflikt</dd></div>
+      <div><dt><code>429</code></dt><dd>Anmeldeversuche begrenzt</dd></div>
+      <div><dt><code>503</code></dt><dd>Dienst vorübergehend nicht verfügbar</dd></div>
+    </dl>
   </section>`;
 }
 

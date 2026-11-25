@@ -85,6 +85,7 @@ Der Kandidat ergänzt Migration 7 (`manual_account_setup`) für manuell angelegt
 
 ## Entwicklung und Lizenz
 
+- [Release Notes für 40.1.0](RELEASE-NOTES.md)
 - [Isolierte Python-, PostgreSQL- und JavaScript-Tests](tests/README.md)
 - [Betrieb, Datensicherung und Abnahme](docs/BETRIEB.md)
 - [MIT-Lizenz](LICENSE). Die mitgelieferten Schriften Fraunces und Plus Jakarta Sans stehen unter der [SIL Open Font License 1.1](licenses/fonts/).

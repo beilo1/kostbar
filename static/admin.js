@@ -398,7 +398,7 @@ function termsPanel() {
   const status = esc(standLabel(isPrivacy ? privacy.date : terms.date)) + (isPrivacy && privacy.template ? ' · Vorlage' : '');
   return `<div class="panel-heading"><div><h2>${title} bearbeiten</h2><p>${status}</p></div></div>
     <form id="terms-form" class="terms-editor" data-document="${isPrivacy ? 'privacy' : 'terms'}">
-      <label>${isPrivacy ? 'Standdatum' : 'Standdatum für den Ausdruck'}<input name="date" type="date" value="${esc(isPrivacy ? privacy.date : (terms.date || termsPrintDate(terms.version)))}"${isPrivacy ? ' required' : ''}></label>
+      <label>Standdatum<input name="date" type="date" value="${esc(isPrivacy ? privacy.date : (terms.date || termsPrintDate(terms.version)))}"${isPrivacy ? ' required' : ''}></label>
       <div class="editor-toolbar" role="group" aria-label="Formatierung">
         <button class="button outline compact" type="button" data-format="heading">Überschrift</button>
         <button class="button outline compact" type="button" data-format="subheading">Zwischenüberschrift</button>
