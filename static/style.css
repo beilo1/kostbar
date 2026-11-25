@@ -269,6 +269,15 @@ input:not([type=checkbox]), select { width: 100%; min-height: 45px; min-width: 0
 .preview-toolbar label { font-size: 13px; }
 .preview-toolbar select { min-height: 43px; padding: 6px 9px; }
 #preview-status { display: flex; align-items: center; min-height: 43px; margin: 0; font-size: 14px; color: var(--muted); }
+.terminal-preview main { padding: clamp(10px, 3vw, 28px); }
+.preview-device {
+  width: min(100%, 1310px); margin: 0 auto; padding: clamp(6px, 1.2vw, 14px);
+  border: 1px solid #515b54; border-radius: 21px; background: #26332d; color: #f1f4ef;
+  box-shadow: 0 10px 26px #203c3026;
+}
+#preview-viewport { position: relative; aspect-ratio: 8 / 5; overflow: hidden; border-radius: 8px; background: var(--canvas); }
+#preview-screen { position: absolute; inset: 0 auto auto 0; border: 0; transform-origin: top left; }
+.preview-device figcaption { margin-top: 8px; text-align: center; font-size: var(--text-caption); }
 @media (max-width: 950px) {
   .preview-toolbar { padding: 8px 12px; }
   #preview-status { font-size: 12px; }
@@ -431,7 +440,7 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .footer-link:hover { color: var(--ink); }
 .footer-links { display: flex; flex-wrap: wrap; column-gap: 16px; }
 .kiosk .brand small { text-transform: uppercase; }
-.terms-card { max-width: 780px; margin: 0 auto; padding: clamp(22px, 4vw, 49px); background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); }
+.terms-card { max-width: 950px; margin: 0 auto; padding: clamp(22px, 4vw, 49px); background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); }
 .terms-card h1 { font-size: clamp(27px, 5vw, 51px); margin: 8px 0 10px; letter-spacing: -.05em; overflow-wrap: anywhere; }
 .terms-version { font-size: var(--text-caption); color: var(--muted); font-weight: 720; margin: 5px 0 10px; }
 .terms-card section, #terms-dialog-content section { padding: 13px 0; border-top: 1px solid var(--line); }
@@ -446,7 +455,7 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .project-license summary { cursor: pointer; text-decoration: underline; }
 .project-license-content pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.5 var(--text-font); }
 .project-qr { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
-#terms-dialog { width: min(670px, calc(100vw - 30px)); max-height: min(85dvh, 800px); }
+#terms-dialog { width: min(920px, calc(100vw - 30px)); max-height: min(85dvh, 800px); }
 #project-dialog { width: min(650px, calc(100vw - 30px)); max-height: 90dvh; }
 .project-dialog-content .project-notice { margin-top: 0; }
 .project-dialog-content a { overflow-wrap: anywhere; }
@@ -460,17 +469,35 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .journal-filters .filter { width: min(190px, 100%); }
 .journal-filters.filter-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(390px, 100%); align-items: end; }
 .journal-filters.filter-pair .filter { width: 100%; min-width: 0; }
+.journal-controls {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 118px);
+  width: min(505px, 100%); column-gap: 12px; align-items: end;
+}
+.journal-controls .filter { width: 100%; min-width: 0; }
+.journal-field { display: grid; gap: 6px; }
+.journal-controls #journal-account-button {
+  display: flex; justify-content: space-between; width: 100%; min-width: 0; min-height: 45px;
+  padding: 8px 11px; border-color: #c6cbbd; border-radius: 10px;
+  background: #faf9f2; color: var(--ink); font-weight: 730;
+  text-align: left;
+}
+.journal-controls #journal-account-button span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.journal-controls #journal-account-button::after {
+  content: ''; flex: 0 0 6px; height: 6px; margin: 0 2px 2px 0;
+  border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(45deg);
+}
+.journal-check { display: flex; align-items: center; justify-content: center; min-height: 45px; border: 1px solid #c6cbbd; border-radius: 10px; background: #faf9f2; cursor: pointer; }
+.journal-check input { accent-color: var(--deep); width: 19px; height: 19px; }
 .journal-account-list { display: grid; gap: 6px; margin-top: 10px; }
 .journal-account-list button { justify-content: space-between; gap: 12px; text-align: left; }
 .journal-account-list small { flex-shrink: 0; }
-#journal-account-button { white-space: normal; text-align: left; }
 .paypal-settings {
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;
   margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
 }
 .paypal-settings h3, .paypal-settings p { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 420px) {
-  .journal-filters.filter-pair { grid-template-columns: minmax(0, 1fr); }
+  .journal-filters.filter-pair, .journal-controls { grid-template-columns: minmax(0, 1fr); }
 }
 
 #kiosk-dialog { width: min(530px, 94vw); max-height: 92dvh; }
@@ -502,7 +529,7 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
 .manual-search-info label { width: min(100%, 480px); text-align: center; }
 #manual-query { text-align: center; }
 #manual-results { width: 100%; justify-content: center; text-align: center; max-height: 72px; }
-#manual-results:not(:empty) { margin-top: 6px; }
+#manual-results:not(:empty) { margin-top: 14px; }
 #manual-results > button { min-height: 44px; }
 #kiosk-dialog:has(#manual-query) { width: min(820px, 94vw); max-height: 96dvh; }
 #kiosk-dialog:has(#manual-query) .dialog-keyboard button,
@@ -576,7 +603,9 @@ dialog .form-actions { justify-content: flex-end; margin-top: 4px; }
   font-variant-numeric: tabular-nums;
 }
 
-.journal-filters .export-action { align-self: end; }
+.people-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.people-controls .filter { width: min(240px, 100%); }
+.people-controls .button { min-height: 45px; font-size: var(--text-control); }
 .product-filters { margin: 0 0 12px; }
 .audit-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 13px; }
 .audit-pagination span { color: var(--muted); font-size: var(--text-caption); }
@@ -708,8 +737,8 @@ html:has(> .kiosk), .kiosk :is(.menu-area, .basket-body, #terms-dialog-content, 
 .kiosk .tap-copy p { font-size: clamp(17px, 1.5vw, 21px); }
 .kiosk :is(.screen, .topbar, dialog) .button { font-size: var(--text-kiosk); line-height: 1.2; }
 .kiosk :is(.screen, .topbar, dialog) .button.compact, .kiosk .quiet-link { font-size: var(--text-body); }
-.kiosk .topbar [data-logout] { background: #f6e2de; border-color: #e7c2ba; color: #742a25; }
-.kiosk .topbar [data-logout]:hover { background: #eed0c9; }
+.button.sign-out { background: #f6e2de; border-color: #e7c2ba; color: #742a25; }
+.button.sign-out:hover:not(:disabled) { background: #eed0c9; }
 .kiosk .site-footer { font-size: var(--text-body); flex-wrap: wrap; row-gap: 2px; }
 .kiosk .site-footer a { display: inline-block; }
 

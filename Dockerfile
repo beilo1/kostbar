@@ -1,6 +1,6 @@
 FROM python:3.13-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-LABEL org.opencontainers.image.title="KoSTbar" org.opencontainers.image.version="40.1.0-rc.1" \
+LABEL org.opencontainers.image.title="KoSTbar" org.opencontainers.image.version="40.1.0-rc.2" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.source="https://github.com/beilo1/kostbar"
 WORKDIR /app

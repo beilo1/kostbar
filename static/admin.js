@@ -191,8 +191,8 @@ function rowAction(action, value, label, glyph, tone = 'neutral', description = 
   return `<button type="button" class="button compact row-action action-${tone}" data-${action}="${esc(value)}"${tooltip}>${icon(glyph, 15)}${label}</button>`;
 }
 
-function exportLink(path, label, description) {
-  return `<a class="button compact row-action action-good export-action" href="/api/admin/${path}" download
+function exportLink(path, label, description, compact = true) {
+  return `<a class="button compact action-good${compact ? ' row-action' : ''}" href="/api/admin/${path}" download
     title="${description}" aria-label="${label} als Excel-Datei">${icon('table', 15)}${label}</a>`;
 }
 
@@ -219,11 +219,12 @@ function journalPanel() {
       <td class="num">${amount(j.cents)}</td><td>${j.kind === 'purchase' && !j.reversed_by ? rowAction('reverse', j.id, 'Stornieren', 'undo', 'danger') : ''}</td></tr>`;
   }).join('');
   return `<div class="panel-heading"><div><h2>Kassenbuch</h2><p>Einzelbuchungen der letzten 90 Tage.</p></div>
-    <div class="journal-filters filter-pair">
-      <div class="filter"><span id="journal-account-label">Konto</span><button type="button" class="button outline compact"
-        aria-labelledby="journal-account-label journal-account-button" id="journal-account-button" data-journal-account>${esc(selectedPersonLabel || 'Alle Konten')}</button></div>
+    <div class="journal-filters journal-controls">
+      <div class="filter journal-field"><label for="journal-account-button" id="journal-account-label">Konto</label>
+        <button type="button" class="button outline compact" aria-haspopup="dialog"
+          aria-labelledby="journal-account-label journal-account-button" id="journal-account-button" data-journal-account><span>${esc(selectedPersonLabel || 'Alle')}</span></button></div>
       <label class="filter">Verkaufspunkt<select id="journal-terminal"><option value="">Alle</option>${options(historicalSites(), selectedTerminal)}</select></label>
-      <label class="check-field"><input type="checkbox" id="journal-reversals" ${showReversals ? 'checked' : ''}> Stornos anzeigen</label>
+      <label class="filter">Stornos anzeigen<span class="journal-check"><input type="checkbox" id="journal-reversals" ${showReversals ? 'checked' : ''}></span></label>
     </div></div>
     ${table(['Buchung', 'Konto', 'Verkaufspunkt', 'Art', 'Positionen / Grund', 'Betrag', 'Aktion'], rows, 'Für diese Auswahl gibt es noch keine Buchungen.')}
     ${journal.next ? '<button class="button outline compact more" data-more>Ältere Buchungen</button>' : ''}`;
@@ -248,7 +249,7 @@ function accountActions(person) {
   const actions = [
     rowAction('book', id, 'Buchung', 'plus', 'good'),
     rowAction('person', id, 'Bearbeiten', 'edit'),
-    !person.closed_at && rowAction('capture', id, 'Karte ersetzen', 'card', 'info'),
+    !person.closed_at && rowAction('capture', id, person.has_card === false ? 'Karte zuordnen' : 'Karte ersetzen', 'card', 'info'),
     rowAction('show', id, 'Verlauf', 'history'),
     exportLink('export-account?person=' + id, 'Export', 'Kontoauszug als Excel-Datei'),
     person.manual_enabled && rowAction('reset-pin', id, 'PIN zurücksetzen', 'key', 'warn', 'PIN zurücksetzen'),
@@ -273,7 +274,7 @@ function peopleRows() {
     <td class="consent-status">${consentCell(p)}</td>
     <td class="row-actions">${accountActions(p)}</td>
     <td class="account-details"><strong>Konto #${p.id}</strong><small>Seit ${dateTime(p.created)}</small>
-    <small>${esc(medium || type || 'Kartentyp nicht bestimmt')}${medium && type ? ' · ' + esc(type) : ''}</small></td></tr>`;
+    <small>${esc(p.has_card === false ? 'Keine Karte zugeordnet' : medium || type || 'Kartentyp nicht bestimmt')}${p.has_card !== false && medium && type ? ' · ' + esc(type) : ''}</small></td></tr>`;
   }).join('');
 }
 
@@ -309,8 +310,9 @@ async function updatePeopleTable(page = 1, focusSelector) {
 function peoplePanel() {
   const current = peopleView.terms_date ? ' · Nutzungshinweise: ' + standLabel(peopleView.terms_date) : '';
   return `<div class="panel-heading"><div><h2>Benutzer</h2><p>Konten, Salden, Sammelkarten und Zustimmungen${esc(current)}</p></div>
-    <div class="journal-filters"><label class="filter">Name oder Referat suchen<input id="person-search" value="${esc(search)}" type="search" maxlength="240" placeholder="Name, Referat"></label>
-    ${exportLink('export-balances', 'Gesamtexport', 'Saldenliste als Excel-Datei')}</div></div>
+    <div class="people-controls"><label class="filter">Name oder Referat suchen<input id="person-search" value="${esc(search)}" type="search" maxlength="240" placeholder="Name, Referat"></label>
+    ${exportLink('export-balances', 'Gesamtexport', 'Saldenliste als Excel-Datei', false)}
+    <button type="button" class="button primary compact" data-person-create>${icon('plus', 18)} Benutzer anlegen</button></div></div>
     <div id="people-table">${drawPeopleTable()}</div>`;
 }
 
@@ -494,8 +496,31 @@ function changePassword() {
     'Passwort ändern', fields => api('/api/admin/change-password', Object.fromEntries(fields)));
 }
 
+function enrollmentPinFields() {
+  return `<label>Vierstellige Start-PIN<input type="password" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" required></label>
+    <label>Start-PIN bestätigen<input type="password" name="pin_confirmation" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" required></label>`;
+}
+
+function createPerson() {
+  modal('Benutzer anlegen', `<p class="hint">Bei der ersten Anmeldung am Terminal bestätigt die Person die Hinweise, ordnet ihre Karte zu und wählt eine neue PIN.</p>
+    <label>Vorname<input name="first" maxlength="60" required></label>
+    <label>Nachname<input name="last" maxlength="60" required></label>
+    <label>Referat<input name="department" maxlength="80" required></label>${enrollmentPinFields()}`,
+    'Benutzer anlegen', async fields => {
+      const result = await api('/api/admin/person-create', Object.fromEntries(fields));
+      search = '';
+      peopleView.page = 1;
+      return result;
+    });
+}
+
 function resetPin(id) {
   const person = peopleView.people.find(p => p.id === id);
+  if (person.has_card === false) {
+    modal('Neue Start-PIN vergeben', enrollmentPinFields(),
+      'Start-PIN speichern', fields => api('/api/admin/reset-pin', {id, ...Object.fromEntries(fields)}));
+    return;
+  }
   modal('PIN zurücksetzen', `<p><strong>${personName(person)}</strong> vergibt bei der nächsten Anmeldung mit Ausweis selbst eine neue PIN. Aktive Sitzungen des Kontos werden beendet.</p>`,
     'PIN zurücksetzen', () => api('/api/admin/reset-pin', {id}));
 }
@@ -637,7 +662,7 @@ function previewPanel() {
 function render() {
   top.innerHTML = `<span class="operator">${icon('lock', 17)} ${esc(session.name)}${session.super_admin ? ' · Super-Admin' : ''}</span>
     <button class="button outline compact" data-change-password>${icon('key', 17)} Passwort ändern</button>
-    <button class="button outline compact" data-admin-logout>${icon('exit', 17)} Abmelden</button>`;
+    <button class="button outline compact sign-out" data-admin-logout>${icon('exit', 17)} Abmelden</button>`;
   const panels = {journal: journalPanel, people: peoplePanel, products: productsPanel, audit: auditPanel,
     payments: paymentsPanel, report: reportPanel, terms: termsPanel, privacy: termsPanel, admins: adminsPanel,
     sites: sitesPanel, technical: () => technicalPanel(technical), preview: previewPanel};
@@ -700,7 +725,7 @@ async function chooseJournalAccount() {
     <div id="journal-account-results" aria-live="polite"><p>Konten werden geladen …</p></div>
     <div class="form-actions">
       <button type="button" class="button outline" data-close>Abbrechen</button>
-      <button type="button" class="button outline" data-journal-select="">Alle Konten</button>
+      <button type="button" class="button outline" data-journal-select="">Alle</button>
     </div></section>`;
   editor.showModal();
   await loadAccountOptions();
@@ -789,7 +814,7 @@ function reverseEntry(id) {
 async function captureCard(id) {
   const person = peopleView.people.find(p => p.id === id);
   sites = await api('/api/admin/sites');
-  modal('Karte ersetzen', `<p>Konto <strong>${personName(person)}</strong></p>
+  modal(person.has_card === false ? 'Karte zuordnen' : 'Karte ersetzen', `<p>Konto <strong>${personName(person)}</strong></p>
     <label>Leser am Verkaufspunkt<select name="terminal">${options(sites.terminals)}</select></label>`,
     'Leser aktivieren', async fields => {
       const terminal = fields.get('terminal');
@@ -1018,6 +1043,7 @@ document.addEventListener('click', async event => {
     if (d.product) editProduct(Number(d.product));
     if (d.archive) archiveProduct(Number(d.archive));
     if (d.deleteProduct) deleteProduct(Number(d.deleteProduct));
+    if ('personCreate' in d) createPerson();
     if (d.person) editPerson(Number(d.person));
     if (d.closeAccount) closeAccount(Number(d.closeAccount));
     if (d.book) bookPerson(Number(d.book));

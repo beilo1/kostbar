@@ -50,6 +50,29 @@ test('masked PIN fields and touch keypad accept four digits including zero', () 
   assert.equal(canExtendVisit({stage: 'pin-setup', visit: 'visit'}), true);
 });
 
+test('terminal preview scales the frame without changing its reference viewport', () => {
+  const markup = fs.readFileSync(path.join(root, 'static/terminal-preview.html'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'static/preview-screen.js'), 'utf8');
+  const viewport = {};
+  const iframe = {width: '1280', height: '800', style: {}};
+  let resize;
+  assert.match(markup, /id="preview-screen"[^>]*width="1280" height="800"/);
+  vm.runInNewContext(source.slice(source.indexOf('const viewport')), {
+    document: {getElementById: id => id === 'preview-screen' ? iframe : viewport},
+    location: {search: '?terminal=a'}, URLSearchParams,
+    PREVIEW_SCREEN: '/api/admin/terminal-preview/screen',
+    ResizeObserver: class {
+      constructor(callback) { resize = callback; }
+      observe(element) { assert.equal(element, viewport); }
+    },
+  });
+  resize([{contentRect: {width: 800}}]);
+  assert.equal(iframe.style.transform, 'scale(0.625)');
+  assert.equal(iframe.width, '1280');
+  assert.equal(iframe.height, '800');
+  assert.equal(iframe.src, '/api/admin/terminal-preview/screen?terminal=a');
+});
+
 test('manual login fields are cleared by the same expiry path as a shop session', () => {
   const {context, calls} = timerContext('manual', 0);
   vm.runInNewContext(timers + '\nupdateTimers();', context);
@@ -211,7 +234,9 @@ test('admin journal shows escaped reversal details, the reason and the original 
   assert.match(rendered, /Kaffee &lt;alt&gt;/);
   assert.match(rendered, /Grund &lt;b&gt;spät&lt;\/b&gt;/);
   assert.match(rendered, /Zu Kauf #1/);
-  assert.match(rendered, /id="journal-reversals"\s*> Stornos anzeigen/);
+  assert.match(rendered, /Stornos anzeigen<span class="journal-check"><input type="checkbox" id="journal-reversals"\s*>/);
+  assert.match(rendered, /id="journal-account-label">Konto<\/label>/);
+  assert.match(rendered, /data-journal-account><span>Alle<\/span>/);
   context.showReversals = true;
   assert.match(vm.runInNewContext(script + '\njournalPanel();', context), /id="journal-reversals" checked/);
   context.journal.entries[0].items = [];

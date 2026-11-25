@@ -173,6 +173,7 @@ class PostgreSQLTests(unittest.TestCase):
         with self.connect() as db:
             person = self.person(db)
             store.accept_policies(db, person, app.version, app.privacy["version"], terminal.id)
+            db.execute("INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,'fixture')", (person,))
             product = store.available_products(db, terminal.id)[0]
         terminal.kiosk = {"token": "browser", "seen": server.monotonic()}
         app.clear_kiosk(terminal)
@@ -597,6 +598,103 @@ class PostgreSQLTests(unittest.TestCase):
         self.assertEqual(terminal.kiosk["stage"], "idle")
         self.assertIsNone(terminal.capture)
 
+    def test_manually_created_account_requires_policies_card_and_new_pin(self):
+        app = server.App({}, {**self.config, "self_registration": False})
+        admin = self.feature_admin(app, "cashier", False)
+        path = "/api/admin/person-create"
+        start_pin = {"pin": "0123", "pin_confirmation": "0123"}
+        enrollment = {"first": "Lena", "last": "Beispiel", "department": "R2", **start_pin}
+        with self.assertRaises(store.Problem) as auth:
+            app.route(None, "POST", path, {}, enrollment, {})
+        self.assertEqual(auth.exception.status, 401)
+        person = app.route(None, "POST", path, {}, enrollment, admin)[0]["id"]
+        target = app.terminals["a"]
+        target.kiosk = {"token": "browser", "seen": server.monotonic()}
+        app.clear_kiosk(target)
+        uid, used_uid = "04030201", "04030202"
+        with self.connect() as db:
+            self.person(db, app.card_digest(used_uid))
+            account = app.account(db, person=person)
+            self.assertIsNone(account["card"])
+            self.assertTrue(account["pin_temporary"])
+            self.assertFalse(account["accepted"])
+            self.assertNotEqual(account["pin_hash"], start_pin["pin"])
+            audit = db.execute("SELECT new_state FROM audit WHERE person=%s", (person,)).fetchone()
+            self.assertNotIn(start_pin["pin"], audit["new_state"])
+
+        def post(action, values=None):
+            return app.kiosk_route(target, "POST", "/api/kiosk/" + action,
+                                   {"visit": target.kiosk["visit"], **(values or {})}, {"kk_kiosk": "browser"})[0]
+
+        def scan(card):
+            target.kiosk["seen"] = server.monotonic()
+            app.scan(target, card)
+
+        post("manual-start")
+        self.assertEqual(post("manual-search", {"query": "Beispiel"})["people"][0]["id"], person)
+        self.assertEqual(post("manual-login", {"id": person, "pin": start_pin["pin"]})["stage"], "consent")
+        scan(uid)
+        self.assertEqual(target.kiosk["stage"], "consent")
+        self.assertEqual(post("accept-terms", {"accepted": True, "version": app.version,
+                                              "privacy_version": app.privacy["version"]})["stage"], "card-setup")
+        with self.assertRaises(store.Problem):
+            post("pin-setup", {"pin": "4321", "pin_confirmation": "4321"})
+        scan(used_uid)
+        self.assertEqual(target.kiosk["stage"], "card-setup")
+        self.assertIn("bereits zugeordnet", target.kiosk["notice"])
+        scan(uid)
+        self.assertEqual(target.kiosk["stage"], "pin-setup")
+        post("logout")
+        scan(uid)
+        self.assertEqual(target.kiosk["stage"], "idle")
+        post("manual-start")
+        self.assertEqual(post("manual-login", {"id": person, "pin": start_pin["pin"]})["stage"], "pin-setup")
+        for invalid in (start_pin, {"pin": "4321", "pin_confirmation": "1234"}):
+            with self.assertRaises(store.Problem) as refused:
+                post("pin-setup", invalid)
+            self.assertEqual(refused.exception.status, 400)
+        self.assertEqual(post("pin-setup", {"pin": "4321", "pin_confirmation": "4321"})["stage"], "shop")
+        post("logout")
+        post("manual-start")
+        with self.assertRaises(store.Problem) as refused:
+            post("manual-login", {"id": person, "pin": start_pin["pin"]})
+        self.assertEqual(refused.exception.status, 401)
+        self.assertEqual(post("manual-login", {"id": person, "pin": "4321"})["stage"], "shop")
+        post("logout")
+        scan(uid)
+        self.assertEqual(target.kiosk["stage"], "shop")
+        with self.connect() as db:
+            row = app.account(db, person=person)
+            self.assertTrue(row["accepted"])
+            self.assertFalse(row["pin_temporary"])
+            self.assertEqual(row["card"], app.card_digest(uid))
+
+    def test_migration_allows_cardless_accounts_and_preserves_existing_credentials(self):
+        with self.connect() as db:
+            schema.migrate(db, schema.MIGRATIONS[:6])
+            existing = self.person(db)
+            db.execute("INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,'old-hash')", (existing,))
+        app = server.App({}, self.config)
+        with self.connect() as db:
+            self.assertEqual(schema.schema_status(db)[-1]["name"], "manual_account_setup")
+            self.assertEqual(app.account(db, person=existing)["pin_hash"], "old-hash")
+            self.assertFalse(app.account(db, person=existing)["pin_temporary"])
+            self.assertEqual(app.account(db, person=existing)["card"], "synthetic-test-card")
+        admin = self.feature_admin(app, "cashier", False)
+        person = app.route(None, "POST", "/api/admin/person-create", {}, {
+            "first": "Lena", "last": "Beispiel", "department": "R2", "pin": "0123", "pin_confirmation": "0123",
+        }, admin)[0]["id"]
+        app.route(None, "POST", "/api/admin/reset-pin", {}, {
+            "id": person, "pin": "0134", "pin_confirmation": "0134",
+        }, admin)
+        with self.connect() as db:
+            row = app.account(db, person=person)
+            self.assertIsNone(row["card"])
+            self.assertTrue(row["pin_temporary"])
+            self.assertTrue(store.check_password(app.pin_material("0134"), row["pin_hash"]))
+        with self.connect() as db, self.assertRaises(schema.MigrationError):
+            schema.migrate(db, schema.MIGRATIONS[:6])
+
     def test_terminal_management_requires_super_admin_and_delete_keeps_history(self):
         app = server.App({}, self.config)
         admin = self.feature_admin(app, "admin", False)
@@ -652,6 +750,7 @@ class PostgreSQLTests(unittest.TestCase):
         site = app.terminals["a"]
         with self.connect() as db:
             store.accept_policies(db, person, app.version, app.privacy["version"], site.id)
+            db.execute("INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,'fixture')", (person,))
         site.kiosk = {"token": "browser"}
         app.clear_kiosk(site)
         site.kiosk.update(stage="shop", user=person, card="synthetic-test-card", visit="visit", until=server.monotonic() + 15)
@@ -687,6 +786,7 @@ class PostgreSQLTests(unittest.TestCase):
         owner = self.feature_admin(app, "owner", True)
         query = {"terminal": ["a"]}
         catalog, _ = app.route(None, "GET", server.PREVIEW_PATH, query, {}, owner)
+        self.assertEqual((catalog["receipt_seconds"], catalog["cash_receipt_seconds"]), (8, 5))
         product = next(item for item in catalog["products"] if item["category"] == "hot")
         cart = {"lines": [{"id": product["id"], "qty": 2, "cents": product["cents"]}], "progress": 9}
         with self.assertRaises(store.Problem) as forbidden:

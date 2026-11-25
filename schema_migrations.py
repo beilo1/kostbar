@@ -276,6 +276,10 @@ MIGRATIONS = (
     Migration(4, "loyalty_redemptions", LOYALTY_REDEMPTIONS),
     Migration(5, "retired_terminals", "ALTER TABLE terminals ADD COLUMN retired BOOLEAN NOT NULL DEFAULT FALSE;"),
     Migration(6, "paypal_recipient", "ALTER TABLE paypal_requests ADD COLUMN recipient_link TEXT;"),
+    Migration(7, "manual_account_setup", """
+        ALTER TABLE people ALTER COLUMN card DROP NOT NULL;
+        ALTER TABLE manual_credentials ADD COLUMN temporary BOOLEAN NOT NULL DEFAULT FALSE;
+    """),
 )
 LATEST_VERSION = MIGRATIONS[-1].version
 

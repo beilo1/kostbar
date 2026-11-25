@@ -181,10 +181,11 @@ def _load_privacy(conn):
     return privacy
 
 
-def _upgrade_terms(conn, terms, deployment, *, session_idle, receipt_seconds):
+def _upgrade_terms(conn, terms, deployment, *, session_idle, receipt_seconds, cash_receipt_seconds):
     timeout_notice = (
         f"Am gemeinsam genutzten Terminal endet deine Sitzung nach {session_idle} Sekunden ohne Eingabe. "
-        f"Nach einem gebuchten Einkauf oder einer gebuchten Barzahlung wirst du nach {receipt_seconds} Sekunden "
+        f"Nach einem gebuchten Einkauf wirst du nach {receipt_seconds} Sekunden, nach einer gebuchten Barzahlung "
+        f"nach {cash_receipt_seconds} Sekunden "
         "automatisch abgemeldet. Dadurch sind deine Kontodaten für die nächste Person am Terminal nicht mehr sichtbar."
     )
     original_body = body = data.terms_body(terms)
@@ -219,8 +220,9 @@ def _upgrade_terms(conn, terms, deployment, *, session_idle, receipt_seconds):
     return terms
 
 
-def load_documents(conn, default_terms, deployment, *, session_idle, receipt_seconds):
+def load_documents(conn, default_terms, deployment, *, session_idle, receipt_seconds, cash_receipt_seconds):
     terms = data.current_terms(conn, default_terms)
     privacy = _load_privacy(conn)
-    terms = _upgrade_terms(conn, terms, deployment, session_idle=session_idle, receipt_seconds=receipt_seconds)
+    terms = _upgrade_terms(conn, terms, deployment, session_idle=session_idle, receipt_seconds=receipt_seconds,
+                           cash_receipt_seconds=cash_receipt_seconds)
     return terms, privacy

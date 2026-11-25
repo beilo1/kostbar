@@ -68,7 +68,7 @@ sudo docker compose -p kostbar exec -T app python server.py schema-status &&
 curl -fsS --max-time 10 https://kostbar.example.org/healthz
 ```
 
-Erwartet werden Schema-Versionen **1 bis 6** mit `v35_baseline` als erster Version sowie `{"ok": true}`. Nach dem Healthcheck auch die Admin-Anmeldung separat prüfen. Die App läuft als UID/GID `10001:10001` und PostgreSQL nutzt ein eigenes persistentes Volume.
+Erwartet werden Schema-Versionen **1 bis 7** mit `v35_baseline` als erster Version sowie `{"ok": true}`. Nach dem Healthcheck auch die Admin-Anmeldung separat prüfen. Die App läuft als UID/GID `10001:10001` und PostgreSQL nutzt ein eigenes persistentes Volume.
 
 ### DSM-Firewall für die Docker-Netze prüfen
 

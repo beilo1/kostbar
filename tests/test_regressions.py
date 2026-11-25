@@ -245,7 +245,9 @@ class HttpBoundaryTests(unittest.TestCase):
         response = {}
         def start(status, headers):
             response["status"] = int(status.split()[0]); response["headers"] = dict(headers)
-        response["body"] = json.loads(b"".join(self.http(environ, start)))
+        output = b"".join(self.http(environ, start))
+        response["body"] = (json.loads(output) if response["headers"]["Content-Type"].startswith("application/json")
+                            else output.decode())
         return response
 
     def test_admin_requires_authentication(self):
@@ -268,6 +270,20 @@ class HttpBoundaryTests(unittest.TestCase):
 
     def test_sensitive_responses_are_not_cached(self):
         self.assertEqual(self.request("/api/admin/overview")["headers"]["Cache-Control"], "no-store")
+
+    def test_preview_frame_policy_only_applies_to_authorized_preview_documents(self):
+        root = "/api/admin/terminal-preview"
+        denied = self.request(root + "/screen")
+        self.assertEqual((denied["status"], denied["headers"]["X-Frame-Options"]), (401, "DENY"))
+        with patch.object(self.app, "route", return_value=(None, None)):
+            shell = self.request(root + "/page")
+            screen = self.request(root + "/screen")
+        self.assertIn('id="preview-screen"', shell["body"])
+        self.assertIn("frame-src 'self'", shell["headers"]["Content-Security-Policy"])
+        self.assertIn('id="screen"', screen["body"])
+        self.assertEqual(screen["headers"]["X-Frame-Options"], "SAMEORIGIN")
+        self.assertIn("frame-ancestors 'self'", screen["headers"]["Content-Security-Policy"])
+        self.assertEqual(self.request("/")["headers"]["X-Frame-Options"], "DENY")
 
     def test_http_serializes_postgres_timestamps(self):
         with patch.object(self.app, "route", return_value=({"at": datetime(2026, 1, 1, tzinfo=timezone.utc)}, None)):

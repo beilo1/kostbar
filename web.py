@@ -17,6 +17,8 @@ from store import Problem
 
 STATIC = Path(__file__).resolve().parent / "static"
 LICENSE = STATIC.parent / "LICENSE"
+PREVIEW_PAGE = "/api/admin/terminal-preview/page"
+PREVIEW_SCREEN = "/api/admin/terminal-preview/screen"
 MIME = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2",
         ".svg": "image/svg+xml"}
 ASSETS = {p.name: p for p in STATIC.iterdir() if p.is_file() and p.suffix in (".css", ".js")}
@@ -154,7 +156,9 @@ class WsgiApp:
                                         {key: item.value for key, item in cookies.items()}, caddy_version)
         if isinstance(payload, Download):
             return payload.content, payload.mime, cookie, payload.name
-        if path == "/api/admin/terminal-preview/page":
+        if path == PREVIEW_PAGE:
+            return (STATIC / "terminal-preview.html").read_bytes(), "text/html", cookie, None
+        if path == PREVIEW_SCREEN:
             return (STATIC / "index.html").read_bytes(), "text/html", cookie, None
         return self.json_body(payload), "application/json", cookie, None
 
@@ -173,7 +177,15 @@ class WsgiApp:
         except Exception as exc:
             logging.getLogger(__name__).error("Interner Fehler: %s", type(exc).__name__)
             status, content, mime = 500, self.json_body({"error": "Interner Fehler. Prüfe das Dienstprotokoll."}), "application/json"
-        headers = list(SECURITY.items())
+        security = SECURITY
+        if status == 200 and mime == "text/html":
+            path = environ.get("PATH_INFO")
+            if path == PREVIEW_PAGE:
+                security = {**SECURITY, "Content-Security-Policy": SECURITY["Content-Security-Policy"] + "; frame-src 'self'"}
+            elif path == PREVIEW_SCREEN:
+                security = {**SECURITY, "X-Frame-Options": "SAMEORIGIN", "Content-Security-Policy":
+                            SECURITY["Content-Security-Policy"].replace("frame-ancestors 'none'", "frame-ancestors 'self'")}
+        headers = list(security.items())
         if mime in ("text/html", "text/css", "text/javascript", "application/javascript", "application/json"):
             mime += "; charset=utf-8"
         headers.extend((("Content-Type", mime), ("Content-Length", str(len(content)))))

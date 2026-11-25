@@ -1,4 +1,4 @@
-/** @typedef {'idle'|'manual'|'register'|'consent'|'pin-setup'|'shop'|'receipt'} Stage */
+/** @typedef {'idle'|'manual'|'register'|'consent'|'card-setup'|'pin-setup'|'shop'|'receipt'} Stage */
 /**
  * @typedef {object} KioskSession
  * @property {Stage} stage
@@ -13,7 +13,7 @@
  */
 
 /** @type {ReadonlySet<Stage>} */
-const interactive = new Set(['manual', 'register', 'consent', 'pin-setup', 'shop']);
+const interactive = new Set(['manual', 'register', 'consent', 'card-setup', 'pin-setup', 'shop']);
 
 /** @param {KioskSession|null} state @param {string|null|undefined} visit */
 export function canExtendVisit(state, visit = state?.visit) {

@@ -551,6 +551,7 @@ def admin_people_page(db, version, privacy_version, words, sort, descending, pag
     if ids:
         for row in db.execute(
             f"""SELECT p.id,p.first,p.last,p.department,p.active,p.created,p.card_type,p.card_medium,p.closed_at,
+                       p.card IS NOT NULL AS has_card,
                        EXISTS(SELECT 1 FROM manual_credentials m WHERE m.person=p.id) AS manual_enabled,
                        {_PERSON_BALANCE} AS balance, COALESCE(l.progress,0) AS loyalty_progress,
                        COALESCE(l.redeemed,0) AS loyalty_redeemed,

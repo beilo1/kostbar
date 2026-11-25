@@ -1,7 +1,7 @@
 import {api, esc, idempotencyKey, notify, personLabel} from './shared.js';
 
 const PREVIEW_API = '/api/admin/terminal-preview';
-export const PREVIEW_PAGE = PREVIEW_API + '/page';
+export const PREVIEW_SCREEN = PREVIEW_API + '/screen';
 
 const monthFormat = new Intl.DateTimeFormat('sv-SE', {year: 'numeric', month: '2-digit', timeZone: 'Europe/Berlin'});
 const fail = (message, status = 409) => { throw Object.assign(new Error(message), {status}); };
@@ -10,9 +10,14 @@ export function createTerminalPreview() {
   const terminal = new URLSearchParams(location.search).get('terminal');
   const query = '?' + new URLSearchParams({terminal});
   const toolbar = document.getElementById('preview-toolbar');
-  const sites = document.getElementById('preview-sites');
-  const status = document.getElementById('preview-status');
-  const progressField = document.getElementById('preview-progress');
+  const controls = window.frameElement && window.parent.document.getElementById('preview-controls');
+  controls?.append(toolbar);
+  const brand = document.querySelector('.topbar .brand');
+  brand.href = PREVIEW_API + '/page' + query;
+  brand.target = '_top';
+  const sites = toolbar.querySelector('#preview-sites');
+  const status = toolbar.querySelector('#preview-status');
+  const progressField = toolbar.querySelector('#preview-progress');
   const [testCard, registrationCard] = toolbar.querySelectorAll('[data-preview-card]');
   const defaultStatus = status.textContent;
   const guest = {id: 1, first: 'Test', last: 'Gast', department: 'Vorschau', pin: '1234',
@@ -129,7 +134,8 @@ export function createTerminalPreview() {
       balance: account.balance, request, bonus, stamps_earned: stamps};
     if (stamps || bonus.length) receipt.loyalty = loyaltyCard(account.progress);
     stage = 'receipt';
-    until = performance.now() + config.receipt_seconds * 1000;
+    const seconds = kind === 'payment' ? config.cash_receipt_seconds : config.receipt_seconds;
+    until = performance.now() + seconds * 1000;
     return snapshot();
   }
 

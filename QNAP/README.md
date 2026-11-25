@@ -59,7 +59,7 @@ sudo docker compose -p kostbar logs --tail=80 db app proxy
 sudo docker compose -p kostbar exec app python server.py schema-status
 ```
 
-`schema-status` muss die Versionen **1 bis 6** mit `v35_baseline` als erster Version anzeigen. Bei `address already in use` den Portbeleg prüfen oder einen freien Port über `--origin` bei der erstmaligen Konfiguration wählen. Bei `password authentication failed` zusammen mit `Skipping initialization` wurden alte DB-Daten mit neuen Zugangsdaten vermischt. Prüfe dann, zu welcher Installation das Volume gehört. Bei einer bestätigten Altinstallation folge Schritt 0. Prüfe anschließend, dass das Projekt `kostbar` mit einem leeren Datenvolume startet.
+`schema-status` muss die Versionen **1 bis 7** mit `v35_baseline` als erster Version anzeigen. Bei `address already in use` den Portbeleg prüfen oder einen freien Port über `--origin` bei der erstmaligen Konfiguration wählen. Bei `password authentication failed` zusammen mit `Skipping initialization` wurden alte DB-Daten mit neuen Zugangsdaten vermischt. Prüfe dann, zu welcher Installation das Volume gehört. Bei einer bestätigten Altinstallation folge Schritt 0. Prüfe anschließend, dass das Projekt `kostbar` mit einem leeren Datenvolume startet.
 
 ## 4. Super-Admin und HTTPS-Vertrauen
 

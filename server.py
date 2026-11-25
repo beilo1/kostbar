@@ -37,7 +37,8 @@ DEVICE_LIFETIME = 34560000
 SESSION_IDLE = 15
 MANUAL_WINDOW = 900
 MANUAL_LIMIT = 5
-RECEIPT_SECONDS = 5
+RECEIPT_SECONDS = 8
+CASH_RECEIPT_SECONDS = 5
 TERMINAL_ONLINE_SECONDS = 10
 TERMINAL_ADMIN_ACTIONS = ("/api/admin/terminal-create", "/api/admin/terminal", "/api/admin/terminal-delete",
                           "/api/admin/terminal-profile", "/api/admin/kiosk-pair", "/api/admin/kiosk-unpair")
@@ -151,7 +152,8 @@ class App:
         data.initialize(db, self.terminals, self.terms)
         with data.connect(db) as conn:
             self.terms, self.privacy = load_documents(
-                conn, self.terms, self.deployment, session_idle=SESSION_IDLE, receipt_seconds=RECEIPT_SECONDS
+                conn, self.terms, self.deployment, session_idle=SESSION_IDLE, receipt_seconds=RECEIPT_SECONDS,
+                cash_receipt_seconds=CASH_RECEIPT_SECONDS,
             )
             self.retired_terminals = {}
             for row in conn.execute("SELECT id,label,retired FROM terminals ORDER BY id"):
@@ -303,7 +305,7 @@ class App:
         column, value = ("p.card", card) if card is not None else ("p.id", person)
         version, privacy_version = policies or self.policy_documents()
         return db.execute(
-            f"""SELECT p.id,p.first,p.card,p.card_type,p.active,m.pin_hash,
+            f"""SELECT p.id,p.first,p.card,p.card_type,p.active,m.pin_hash,COALESCE(m.temporary,FALSE) AS pin_temporary,
                 EXISTS(SELECT 1 FROM policy_acceptances a WHERE a.person=p.id
                        AND a.terms_version=%s AND a.privacy_version=%s) AS accepted
                 FROM people p LEFT JOIN manual_credentials m ON m.person=p.id WHERE {column}=%s""",
@@ -315,10 +317,36 @@ class App:
             return False
         if session["manual_pin_hash"]:
             return row["pin_hash"] == session["manual_pin_hash"]
-        return row["card"] == session["card"]
+        return session["card"] is not None and row["card"] == session["card"]
 
     def advance_kiosk(self, session, account):
         session["stage"] = kiosk_state.account_stage(account)
+
+    def link_kiosk_card(self, terminal, card, card_type):
+        session = terminal.kiosk
+        try:
+            with data.connect(self.db) as db:
+                data.lock_booking_account(db, session["user"])
+                account = self.account(db, person=session["user"])
+                if not self.valid_account(account, session):
+                    self.clear_kiosk(terminal, "Bitte melde dich erneut an.")
+                    return
+                if kiosk_state.account_stage(account) != Stage.CARD_SETUP:
+                    self.advance_kiosk(session, account)
+                    return
+                if (data.retired_card_active(db, card)
+                        or db.execute("SELECT 1 FROM people WHERE card=%s", (card,)).fetchone()):
+                    session["notice"] = "Diese Karte ist bereits zugeordnet oder gesperrt. Verwende eine andere Karte."
+                    return
+                db.execute("UPDATE people SET card=%s,card_type=%s WHERE id=%s", (card, card_type, account["id"]))
+                data.audit(db, "Terminal", f"Karte für Konto #{account['id']} an {terminal.label} zugeordnet.",
+                           None, {"Kartenzuordnung": "Erfasst"}, person=account["id"])
+        except Exception as exc:
+            if getattr(exc, "sqlstate", None) != "23505":
+                raise
+            session["notice"] = "Diese Karte ist bereits zugeordnet. Verwende eine andere Karte."
+            return
+        session.update(stage=Stage.PIN_SETUP, notice=None, until=monotonic() + SESSION_IDLE)
 
     def scan(self, terminal, uid, card_type=None):
         card = self.card_digest(uid)
@@ -328,13 +356,20 @@ class App:
                 terminal.capture["card_type"] = card_type
             return
         session = terminal.kiosk
-        if not session or session["stage"] != Stage.IDLE or monotonic() - session["seen"] > 3:
+        if not session or monotonic() - session["seen"] > 3:
+            return
+        if session["stage"] == Stage.CARD_SETUP:
+            self.link_kiosk_card(terminal, card, card_type)
+            return
+        if session["stage"] != Stage.IDLE:
             return
         with data.connect(self.db) as db:
             row = self.account(db, card=card)
             retired = data.retired_card_active(db, card)
         if retired or (row and not row["active"]):
             self.clear_kiosk(terminal, "Diese Karte ist gesperrt. Wende dich an das Kassen-Team.")
+        elif row and row["pin_temporary"]:
+            self.clear_kiosk(terminal, "Melde dich ohne Ausweis mit deiner Start-PIN an und schließe die Einrichtung ab.")
         elif not row and not self.registration:
             self.clear_kiosk(terminal, "Diese Karte ist noch nicht freigeschaltet.")
         else:
@@ -395,7 +430,8 @@ class App:
         profile = None
         booking = None
         catalog = None
-        if session["stage"] in (Stage.SHOP, Stage.CONSENT, Stage.PIN_SETUP):
+        account = None
+        if session["stage"] in (Stage.SHOP, Stage.CONSENT, Stage.CARD_SETUP, Stage.PIN_SETUP):
             with data.connect(self.db) as db:
                 account = self.account(db, person=session["user"], policies=policies)
                 if not self.valid_account(account, session):
@@ -423,6 +459,8 @@ class App:
             result["catalog"] = catalog
         if session["stage"] == Stage.RECEIPT:
             result["receipt"] = session["receipt"]
+        if session["stage"] == Stage.PIN_SETUP:
+            result["pin_temporary"] = account["pin_temporary"]
         return result
 
     def require_account(self, db, terminal, *, accepted=True, policies=None):
@@ -431,9 +469,11 @@ class App:
         if not self.valid_account(account, session):
             self.clear_kiosk(terminal)
             raise data.Problem(403, "Dieses Konto ist gesperrt oder der Zugang wurde geändert.")
-        if accepted and not account["accepted"]:
+        if accepted and kiosk_state.account_stage(account) != Stage.SHOP:
             self.advance_kiosk(session, account)
-            raise data.Problem(409, "Bitte bestätige zuerst die aktuellen Nutzungsbedingungen und die Datenschutzerklärung.")
+            message = ("Bitte bestätige zuerst die aktuellen Nutzungsbedingungen und die Datenschutzerklärung."
+                       if not account["accepted"] else "Schließe zuerst die Einrichtung deines Kontos ab.")
+            raise data.Problem(409, message)
         return account
 
     def kiosk_consent(self, terminal, body, registration):
@@ -496,7 +536,7 @@ class App:
             receipt = finance.cash(db, user, terminal.id, key, cents)
         receipt["request"] = key
         session.update(stage=Stage.RECEIPT, receipt=receipt, committed="cash:" + key,
-                       until=monotonic() + RECEIPT_SECONDS)
+                       until=monotonic() + CASH_RECEIPT_SECONDS)
         return self.state(terminal), None
 
     def kiosk_route(self, terminal, method, path, body, cookies, query=None):
@@ -585,12 +625,17 @@ class App:
             pin_hash = self.confirmed_pin_hash(body)
             with data.connect(self.db) as db:
                 data.lock_booking_account(db, session["user"])
-                self.require_account(db, terminal)
-                if not db.execute(
-                    "INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,%s) ON CONFLICT (person) DO NOTHING",
-                    (session["user"], pin_hash),
-                ).rowcount:
-                    raise data.Problem(409, "Eine PIN wurde bereits an einem anderen Terminal vergeben.")
+                account = self.require_account(db, terminal, accepted=False)
+                if kiosk_state.account_stage(account) != Stage.PIN_SETUP:
+                    raise data.Problem(409, "Die PIN kann erst nach Zustimmung und Kartenzuordnung eingerichtet werden.")
+                if account["pin_temporary"] and data.check_password(self.pin_material(body["pin"]), account["pin_hash"]):
+                    raise data.Problem(400, "Wähle eine andere PIN als deine Start-PIN.")
+                db.execute("""INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,%s)
+                              ON CONFLICT(person) DO UPDATE SET pin_hash=excluded.pin_hash,temporary=FALSE""",
+                           (session["user"], pin_hash))
+            if session["manual_pin_hash"] is not None:
+                session["manual_pin_hash"] = pin_hash
+            session["until"] = monotonic() + SESSION_IDLE
             return self.state(terminal), None
         if path in ("/api/kiosk/cash", "/api/kiosk/paypal"):
             return self.kiosk_payment(terminal, path, body)
@@ -941,6 +986,9 @@ class App:
             return {}, None
         if path == "/api/admin/terminal-create":
             return self.create_terminal(body, actor), None
+        if path == "/api/admin/person-create":
+            with data.connect(self.db) as db:
+                return admin_operations.create_person(db, body, actor, self.confirmed_pin_hash(body)), None
         if path == "/api/admin/terminal-delete":
             return self.delete_terminal(body, actor), None
         if path == "/api/admin/paypal-settings":
@@ -1000,7 +1048,7 @@ class App:
             elif path == "/api/admin/delete-product":
                 admin_operations.hide_product(db, body, actor, self.terminal_labels())
             elif path == "/api/admin/reset-pin":
-                invalidate = admin_operations.reset_pin(db, body, actor)
+                invalidate = admin_operations.reset_pin(db, body, actor, self.confirmed_pin_hash)
             elif path == "/api/admin/paypal-confirm":
                 admin_operations.confirm_paypal(db, body, actor, self.key)
             elif path == "/api/admin/paypal-reject":
@@ -1029,14 +1077,14 @@ class App:
     def admin_read(self, path, query, key, session, caddy_version):
         if path == "/api/admin/session":
             return {"name": session["name"], "super_admin": session["super_admin"]}
-        if path in (PREVIEW_PATH, PREVIEW_PATH + "/page"):
+        if path in (PREVIEW_PATH, PREVIEW_PATH + "/page", PREVIEW_PATH + "/screen"):
             terminal = self.terminal(query.get("terminal", [""])[0])
-            if path.endswith("/page"):
+            if path != PREVIEW_PATH:
                 return None
             policies = self.policy_documents()
             return {**self.catalog(terminal), "terminal": terminal.label, "terminals": self.terminal_labels(),
                     "version": policies[0], "privacy_version": policies[1], "registration": self.registration,
-                    "session_idle": SESSION_IDLE, "receipt_seconds": RECEIPT_SECONDS,
+                    "session_idle": SESSION_IDLE, "receipt_seconds": RECEIPT_SECONDS, "cash_receipt_seconds": CASH_RECEIPT_SECONDS,
                     "cash_max": finance.CASH_MAX_CENTS, "paypal": PREVIEW_PAYPAL_LABEL,
                     "loyalty": data.loyalty_card_status(0)}
         if path == PREVIEW_QR_PATH:
@@ -1190,9 +1238,10 @@ class App:
                                     WHERE id=%s AND closed_at IS NULL FOR NO KEY UPDATE""", (capture["person"],)).fetchone()
                 if not old:
                     raise data.Problem(404, "Konto nicht gefunden.")
-                db.execute("""INSERT INTO retired_cards (card,expires_at) VALUES (%s,%s)
-                              ON CONFLICT(card) DO UPDATE SET expires_at=excluded.expires_at""",
-                           (old["card"], datetime.now(timezone.utc) + data.BOOKING_RETENTION))
+                if old["card"]:
+                    db.execute("""INSERT INTO retired_cards (card,expires_at) VALUES (%s,%s)
+                                  ON CONFLICT(card) DO UPDATE SET expires_at=excluded.expires_at""",
+                               (old["card"], datetime.now(timezone.utc) + data.BOOKING_RETENTION))
                 db.execute("UPDATE people SET card=%s,card_type=%s,card_medium=NULL WHERE id=%s",
                            (capture["card"], capture["card_type"], capture["person"]))
                 data.audit(db, actor, f"Karte für Konto #{capture['person']} an {terminal.label} ersetzt.",

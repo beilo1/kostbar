@@ -72,14 +72,35 @@ def hide_product(db, body, actor, labels):
     data.audit(db, actor, f"Produkt #{product} dauerhaft ausgeblendet.", before, None)
 
 
-def reset_pin(db, body, actor):
+def create_person(db, body, actor, pin_hash):
+    first = string(body.get("first"), 60, "Vorname")
+    last = string(body.get("last"), 60, "Nachname")
+    department = string(body.get("department"), 80, "Referat")
+    person = db.execute("INSERT INTO people (first,last,department,created) VALUES (%s,%s,%s,%s) RETURNING id",
+                        (first, last, department, data.now())).fetchone()["id"]
+    db.execute("INSERT INTO manual_credentials (person,pin_hash,temporary) VALUES (%s,%s,TRUE)", (person, pin_hash))
+    data.audit(db, actor, f"Konto #{person} manuell angelegt.", None, data.person_snapshot(db, person), person=person)
+    return {"id": person}
+
+
+def reset_pin(db, body, actor, confirmed_pin_hash):
     person = number(body.get("id"), 1, 2**31 - 1, "Konto")
     data.lock_booking_account(db, person)
-    removed = db.execute("DELETE FROM manual_credentials WHERE person=%s", (person,)).rowcount
+    account = db.execute("SELECT card,closed_at FROM people WHERE id=%s", (person,)).fetchone()
+    if account["closed_at"]:
+        raise data.Problem(409, "Dieses Konto ist zur Löschung vorgemerkt.")
+    if account["card"] is None:
+        db.execute("""INSERT INTO manual_credentials (person,pin_hash,temporary) VALUES (%s,%s,TRUE)
+                      ON CONFLICT(person) DO UPDATE SET pin_hash=excluded.pin_hash,temporary=TRUE""",
+                   (person, confirmed_pin_hash(body)))
+        change = "Neue Start-PIN vergeben"
+    else:
+        removed = db.execute("DELETE FROM manual_credentials WHERE person=%s", (person,)).rowcount
+        change = "Neu einzurichten" if removed else None
     db.execute("DELETE FROM manual_attempts WHERE person=%s", (person,))
-    if removed:
+    if change:
         data.audit(db, actor, f"PIN für Konto #{person} zurückgesetzt.",
-                   {"Manuelle Anmeldung": "Eingerichtet"}, {"Manuelle Anmeldung": "Neu einzurichten"},
+                   None, {"Manuelle Anmeldung": change},
                    person=person)
     return KioskInvalidation(person, "Die PIN wurde zurückgesetzt.")
 

@@ -2,7 +2,7 @@ import {createKioskDialog} from './kiosk-actions.js';
 import {animateReceiptCard, loyaltyCardMarkup} from './loyalty-card.js';
 import {keyboardMarkup, pinField} from './kiosk-keyboard.js';
 import {acceptsState, canExtendVisit, sessionViewChanged} from './kiosk-session.js';
-import {createTerminalPreview, PREVIEW_PAGE} from './terminal-preview.js';
+import {createTerminalPreview, PREVIEW_SCREEN} from './terminal-preview.js';
 import { icon, terminalArt } from './art.js';
 import {adjustCart, shopMarkup, showBasket, showCatalog} from './shop-view.js';
 import { api, esc, euro, idempotencyKey, notify } from './shared.js';
@@ -17,7 +17,7 @@ const termsContent = document.getElementById('terms-dialog-content');
 const timeoutDialog = document.getElementById('timeout-dialog');
 const timeoutCountdown = document.getElementById('timeout-countdown');
 const INACTIVITY_WARNING_SECONDS = 5;
-const preview = location.pathname === PREVIEW_PAGE ? createTerminalPreview() : null;
+const preview = location.pathname === PREVIEW_SCREEN ? createTerminalPreview() : null;
 const kioskApi = preview?.request ?? api;
 const instance = !preview && /^#setup=([a-f0-9]{64})$/.exec(location.hash)?.[1];
 if (instance) history.replaceState(null, '', location.pathname + location.search);
@@ -84,7 +84,7 @@ function updateIdle() {
 }
 
 function stageTop() {
-  top.innerHTML = `<button class="button outline compact" data-logout>${icon('exit', 19)} <span>Abmelden</span></button>`;
+  top.innerHTML = `<button class="button outline compact sign-out" data-logout>${icon('exit', 19)} <span>Abmelden</span></button>`;
 }
 
 function consentFields() {
@@ -130,8 +130,8 @@ function renderPinSetup() {
   stageTop();
   screen.innerHTML = `<section class="center-card registration registration-entry">
     <div class="round-icon">${icon('key', 27)}</div>
-    <p class="eyebrow">ZUGANG OHNE AUSWEIS</p><h1>Vergib deine PIN.</h1>
-    <p class="muted">Wähle vier Ziffern und gib dieselbe PIN zur Bestätigung erneut ein.</p>
+    <p class="eyebrow">ZUGANG OHNE AUSWEIS</p><h1>${state.pin_temporary ? 'Ändere deine Start-PIN.' : 'Vergib deine PIN.'}</h1>
+    <p class="muted">${state.pin_temporary ? 'Wähle eine andere vierstellige PIN und bestätige sie.' : 'Wähle vier Ziffern und gib dieselbe PIN zur Bestätigung erneut ein.'}</p>
     <form id="pin-setup-form">
       <div class="registration-fields">
         ${pinFields()}
@@ -153,10 +153,20 @@ function renderConsent() {
     <p class="eyebrow">VOR DEM EINKAUF</p><h1>Nutzung und Datenschutz</h1>
     <p class="muted">Bitte akzeptiere die Nutzungsbedingungen und lies die Datenschutzerklärung, um dein Konto weiter zu nutzen.</p>
     <form id="consent-form">${consentFields()}
-      <div class="form-actions"><button class="button primary" type="submit">Zum Sortiment ${icon('arrow', 19)}</button></div>
+      <div class="form-actions"><button class="button primary" type="submit">Weiter ${icon('arrow', 19)}</button></div>
       <p id="register-error" class="form-error" role="alert"></p>
     </form></section>`;
   screen.querySelector('[name=accepted]').focus({preventScroll: true});
+}
+
+function renderCardSetup() {
+  stageTop();
+  screen.innerHTML = `<section class="center-card registration">
+    <div class="round-icon">${icon('card', 27)}</div>
+    <h1>Halte deinen Ausweis an.</h1>
+    <p>Die Karte wird deinem Konto zugeordnet. Danach vergibst du deine neue PIN.</p>
+    <p class="form-error" id="card-setup-notice" role="status"></p>
+  </section>`;
 }
 
 function showTerms(privacy = false) {
@@ -333,6 +343,7 @@ function applyState(next) {
     }
     if (next.stage === 'register') renderRegistration();
     if (next.stage === 'consent') renderConsent();
+    if (next.stage === 'card-setup') renderCardSetup();
     if (next.stage === 'pin-setup') renderPinSetup();
     if (next.stage === 'shop') {
       if (next.booking) {
@@ -353,6 +364,10 @@ function applyState(next) {
     toastNotice = next.notice;
   }
   if (next.stage === 'shop' && !next.booking) updateProfile();
+  if (next.stage === 'card-setup') {
+    document.getElementById('card-setup-notice').textContent = next.notice ||
+      (next.reader ? '' : 'Der Kartenleser ist gerade nicht verbunden.');
+  }
   updateTimers();
 }
 

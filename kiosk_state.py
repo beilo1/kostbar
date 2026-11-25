@@ -7,12 +7,13 @@ class Stage(StrEnum):
     MANUAL = "manual"
     REGISTER = "register"
     CONSENT = "consent"
+    CARD_SETUP = "card-setup"
     PIN_SETUP = "pin-setup"
     SHOP = "shop"
     RECEIPT = "receipt"
 
 
-ACTIVITY_STAGES = frozenset((Stage.MANUAL, Stage.REGISTER, Stage.CONSENT, Stage.PIN_SETUP, Stage.SHOP))
+ACTIVITY_STAGES = frozenset((Stage.MANUAL, Stage.REGISTER, Stage.CONSENT, Stage.CARD_SETUP, Stage.PIN_SETUP, Stage.SHOP))
 STAGE_ACTIONS = {
     "/api/kiosk/register": Stage.REGISTER,
     "/api/kiosk/accept-terms": Stage.CONSENT,
@@ -28,6 +29,8 @@ def reset(session, notice=None):
 def account_stage(account):
     if not account["accepted"]:
         return Stage.CONSENT
-    if not account["pin_hash"]:
+    if not account["card"]:
+        return Stage.CARD_SETUP
+    if not account["pin_hash"] or account["pin_temporary"]:
         return Stage.PIN_SETUP
     return Stage.SHOP
