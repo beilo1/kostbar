@@ -12,15 +12,25 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 - Mehrere Verkaufspunkte mit eigenem Sortiment und einer Terminal-Vorschau zum Simulieren von Einkäufen
 - Verwaltung mit getrennten Admin-Rollen, manueller Benutzeranlage, Journal, Monatsauswertungen und Exporten
 
-### Verwaltung
+### Terminal vor der Anmeldung
 
-![KoSTbar-Verwaltung mit Kassenbuch der Pausenküche und fiktiven Konten](docs/images/backend.png)
+![Startseite des KoSTbar-Terminals Pausenküche mit Kartenanmeldung und PIN-Option](docs/images/terminal-start.png)
 
 ### Sammelkarte am Terminal
 
 ![Geöffnete digitale Sammelkarte von Max mit sieben von zehn Stempeln](docs/images/sammelkarte.png)
 
-Die Screenshots zeigen fiktive Beispieldaten aus v38.0.1. Die [aktuelle Bedienungsanleitung](docs/BETRIEB.md#nutzungsbedingungen-und-abnahme) beschreibt die neue Benutzerliste mit Seitenwechsel, den Storno-Filter und den Dialog **Projekt und Lizenz**.
+### Verwaltung
+
+#### Kassenbuch
+
+![Kassenbuch der Pausenküche mit Käufen und Barzahlungen von Max Berger, Nora Winter und Theo Sommer](docs/images/backend.png)
+
+#### Benutzerverwaltung
+
+![Benutzerverwaltung für Max Berger, Nora Winter und Theo Sommer mit Salden, Sammelkarten und Kontoaktionen](docs/images/benutzerverwaltung.png)
+
+Die Screenshots zeigen fiktive Beispieldaten. Die [Bedienungsanleitung](docs/BETRIEB.md#nutzungsbedingungen-und-abnahme) beschreibt die Benutzerliste, den Storno-Filter und den Dialog **Projekt und Lizenz**.
 
 ## Hardware
 
@@ -36,7 +46,7 @@ NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine ver
 
 ![Fotorealistische Visualisierung des KoSTbar-Terminals Pausenküche mit limettengrünem 3D-Druck-Gehäuse und USB-NFC-Leser](docs/images/terminal-render.jpg)
 
-*Visualisierung des Terminals mit 3D-gedrucktem Gehäuse und eingebettetem Screenshot aus v38.0.1.*
+*Visualisierung des 3D-gedruckten Terminalgehäuses mit der KoSTbar-Produktansicht.*
 
 ## Installation
 
