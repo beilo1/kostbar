@@ -103,3 +103,5 @@ sudo -u kaffeekasse -- curl -fsS --max-time 10 \
 Das Dienstkonto ist erforderlich, weil `/etc/kaffeekasse-terminal` absichtlich `root:kaffeekasse` und Modus `0750` hat. Ein Aufruf als normaler Wartungsbenutzer kann deshalb `curl: (77)` liefern. Die Verzeichnisrechte dafür nicht öffnen und die Zertifikatsprüfung nicht abschalten.
 
 Danach [Betrieb und Abnahme](../docs/BETRIEB.md) durchführen. Das Docker-Datenvolume und Sicherungen müssen am tatsächlichen NAS-Speicherort in das gewünschte Verschlüsselungs- und Backupkonzept einbezogen sein.
+
+Den täglichen lokalen XLSX-Saldenexport und die 90-Tage-Bereinigung beschreibt [der Update-Leitfaden](../docs/UPDATE-RC3.md#4-täglichen-saldenexport-einrichten).

@@ -155,3 +155,5 @@ sudo -u kaffeekasse -- curl -fsS --max-time 10 \
 ```
 
 Den Test mit dem Dienstkonto ausführen; das Terminal-Verzeichnis bleibt geschützt. Abschließend [Betrieb und Abnahme](../docs/BETRIEB.md) durchführen.
+
+Den täglichen lokalen XLSX-Saldenexport und die 90-Tage-Bereinigung beschreibt [der Update-Leitfaden](../docs/UPDATE-RC3.md#4-täglichen-saldenexport-einrichten).

@@ -20,11 +20,13 @@ LICENSE = STATIC.parent / "LICENSE"
 PREVIEW_PAGE = "/api/admin/terminal-preview/page"
 PREVIEW_SCREEN = "/api/admin/terminal-preview/screen"
 MIME = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2",
-        ".svg": "image/svg+xml"}
+        ".svg": "image/svg+xml", ".webp": "image/webp"}
 ASSETS = {p.name: p for p in STATIC.iterdir() if p.is_file() and p.suffix in (".css", ".js")}
 ASSETS["kostbar-logo.svg"] = STATIC / "kostbar-logo.svg"
 ASSETS["favicon.svg"] = STATIC / "favicon.svg"
 ASSETS["project-qr.svg"] = STATIC / "project-qr.svg"
+ASSETS["nfc-logo.svg"] = STATIC / "nfc-logo.svg"
+ASSETS.update({f"products/{p.name}": p for p in (STATIC / "products").glob("*.webp") if p.is_file()})
 ASSETS["print-document.html"] = STATIC / "print-document.html"
 ASSETS.update({f"fonts/{p.name}": p for p in (STATIC / "fonts").glob("*.woff2") if p.is_file()})
 SECURITY = {

@@ -51,12 +51,12 @@ class ManualTimeoutTests(unittest.TestCase):
         return self.app.kiosk_route(self.terminal, "POST", "/api/kiosk/" + action,
                                    body or {}, self.cookies)[0]
 
-    def test_manual_start_has_a_visit_and_fifteen_second_deadline(self):
+    def test_manual_start_has_a_visit_and_twenty_second_deadline(self):
         state = self.call("manual-start")
         self.assertEqual(state["stage"], "manual")
         self.assertTrue(state["visit"])
         self.assertGreater(state["remaining"], 14)
-        self.assertLessEqual(state["remaining"], 15)
+        self.assertLessEqual(state["remaining"], 20)
 
     def test_abandoned_manual_login_expires_and_erases_visit(self):
         state = self.call("manual-start")
@@ -74,7 +74,7 @@ class ManualTimeoutTests(unittest.TestCase):
         clock = server.monotonic() + 9
         with patch("server.monotonic", return_value=clock):
             self.call("activity", {"visit": state["visit"]})
-        self.assertEqual(self.terminal.kiosk["until"], clock + 15)
+        self.assertEqual(self.terminal.kiosk["until"], clock + 20)
 
     def test_stale_activity_cannot_extend_another_visit(self):
         self.call("manual-start")

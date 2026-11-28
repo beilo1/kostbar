@@ -11,7 +11,11 @@ from zoneinfo import ZoneInfo
 import schema_migrations
 
 CATEGORIES = {
-    "cold": "Kaltgetränke", "hot": "Heißgetränke", "snack": "Snacks", "sweet": "Süßigkeiten",
+    "cold": "Kaltgetränke", "hot": "Heißgetränke", "snack": "Snacks",
+    "sweet": "Süßes", "chocolate": "Schokoladiges",
+}
+PRODUCT_ORDER_GROUPS = {
+    "drink": ("cold", "hot"), "snack": ("snack",), "sweet": ("sweet",), "chocolate": ("chocolate",),
 }
 LOYALTY_STAMPS = 10
 BOOKING_RETENTION = timedelta(days=90)
@@ -21,6 +25,11 @@ ICONS = {
     "energy": "Dose", "coffee": "Kaffee", "cappuccino": "Cappuccino", "milk": "Milchkaffee",
     "salami": "Snack", "noodles": "Nudeln", "pasta": "Pasta",
     "bar": "Riegel", "wafer": "Waffel", "candy": "Bonbons", "cookie": "Keks",
+    "cola": "Cola", "limo": "Limo", "chips": "Chips", "peanuts": "Nic Nacs / Erdnüsse",
+    "trail-mix": "Studentenfutter / Nussmix", "mr-tom": "Mr. Tom Riegel", "hanuta": "Hanuta",
+    "knoppers-bar": "Knoppers Riegel", "chocolate-bar": "Schokoriegel", "chocolate-tablet": "Schokoladentafel",
+    "twix": "Twix", "mentos": "Mentos", "maoam": "Maoam", "ballisto": "Ballisto", "oreo": "Oreo",
+    "double-biscuit": "Doppelkeks / Prinzenrolle", "snickers": "Snickers", "mars": "Mars",
 }
 CATALOG = (
     ("cold", "Mineralwasser", 50, "water"),
@@ -33,16 +42,16 @@ CATALOG = (
     ("snack", "Bifi", 100, "salami"),
     ("snack", "Asianudeln", 100, "noodles"),
     ("snack", "Pasta Pot", 100, "pasta"),
-    ("sweet", "Kinderriegel", 50, "bar"),
-    ("sweet", "Kinder Country", 50, "wafer"),
-    ("sweet", "Balisto", 50, "bar"),
-    ("sweet", "Duplo", 50, "wafer"),
-    ("sweet", "Maoam", 50, "candy"),
-    ("sweet", "Mentos", 50, "candy"),
-    ("sweet", "Knoppers", 50, "wafer"),
-    ("sweet", "Mars", 50, "bar"),
-    ("sweet", "Snickers", 50, "bar"),
-    ("sweet", "Oreo", 50, "cookie"),
+    ("chocolate", "Kinderriegel", 50, "bar"),
+    ("chocolate", "Kinder Country", 50, "wafer"),
+    ("chocolate", "Balisto", 50, "ballisto"),
+    ("chocolate", "Duplo", 50, "wafer"),
+    ("sweet", "Maoam", 50, "maoam"),
+    ("sweet", "Mentos", 50, "mentos"),
+    ("chocolate", "Knoppers", 50, "wafer"),
+    ("chocolate", "Mars", 50, "mars"),
+    ("chocolate", "Snickers", 50, "snickers"),
+    ("chocolate", "Oreo", 50, "oreo"),
 )
 
 
@@ -139,6 +148,7 @@ def initialize(source, terminals, terms):
         if db.execute("INSERT INTO settings VALUES ('catalog_seeded', '1') ON CONFLICT DO NOTHING").rowcount:
             with db.cursor() as cursor:
                 cursor.executemany("INSERT INTO products (category,name,cents,icon) VALUES (%s,%s,%s,%s)", CATALOG)
+            db.execute("UPDATE products SET sort_position=id WHERE sort_position=0")
             db.execute("INSERT INTO product_terminals SELECT p.id,t.id FROM products p CROSS JOIN terminals t WHERE NOT t.retired")
 
 
@@ -163,8 +173,9 @@ def expire_booking_details(db, clock, key):
     db.execute("SELECT pg_advisory_xact_lock(739310483)")
     cutoff = booking_cutoff(clock)
     audit_cutoff = (clock - AUDIT_RETENTION).isoformat(timespec="seconds")
-    # A stornable purchase and its items must remain together while it is locked for reversal.
-    db.execute("SELECT id FROM journal WHERE at<=%s AND kind='purchase' ORDER BY id FOR UPDATE", (cutoff,))
+    # Take original-booking locks before folding or deleting their data.
+    db.execute("SELECT id FROM journal WHERE at<=%s AND kind IN ('purchase','payment','correction') ORDER BY id FOR UPDATE",
+               (cutoff,))
     db.execute("""INSERT INTO carried_balances (person,cents)
                   SELECT person,SUM(cents) FROM journal WHERE at<=%s
                   GROUP BY person HAVING SUM(cents)<>0
@@ -228,7 +239,7 @@ def available_products(db, terminal):
     return [dict(row) for row in db.execute(
         """SELECT p.id,p.category,p.name,p.cents,p.icon,p.active FROM products p
            JOIN product_terminals pt ON p.id=pt.product
-           WHERE pt.terminal=%s AND p.active=1 AND p.deleted=0 ORDER BY p.id""", (terminal,)
+           WHERE pt.terminal=%s AND p.active=1 AND p.deleted=0 ORDER BY p.sort_position,p.id""", (terminal,)
     )]
 
 
@@ -241,7 +252,7 @@ def all_products(db):
     for row in db.execute("SELECT product,terminal FROM product_terminals ORDER BY terminal"):
         assignments.setdefault(row["product"], []).append(row["terminal"])
     return [{**dict(row), "terminals": assignments.get(row["id"], [])}
-            for row in db.execute("SELECT id,category,name,cents,icon,active FROM products WHERE deleted=0 ORDER BY id")]
+            for row in db.execute("SELECT id,category,name,cents,icon,active FROM products WHERE deleted=0 ORDER BY sort_position,id")]
 
 
 def entry(db, person, kind, cents, actor=None, note=None, request_id=None, reverses=None, terminal=None, *, kiosk_pending=False, at=None, loyalty_delta=0):
@@ -478,9 +489,9 @@ def _items_for_page(db, page):
 def list_journal(db, person, before, terminal=None, *, cutoff=None, include_reversals=True):
     cutoff = cutoff if cutoff is not None else booking_cutoff()
     rows = db.execute(
-        """SELECT j.*, p.first, p.last, p.department, r.id AS reversed_by, purchase.id AS retained_reverses
+        """SELECT j.*, p.first, p.last, p.department, r.id AS reversed_by, original.id AS retained_reverses, original.kind AS reversed_kind
            FROM journal j JOIN people p ON p.id=j.person LEFT JOIN journal r ON r.reverses=j.id
-           LEFT JOIN journal purchase ON purchase.id=j.reverses AND purchase.at>%s
+           LEFT JOIN journal original ON original.id=j.reverses AND original.at>%s
            WHERE j.id<%s AND j.at>%s AND (CAST(%s AS BIGINT) IS NULL OR j.person=%s)
              AND (CAST(%s AS TEXT) IS NULL OR j.terminal=%s) AND (%s OR j.kind <> 'reversal')
            ORDER BY j.id DESC LIMIT 51""",
@@ -695,8 +706,8 @@ def personal_history(db, person, start, end, before, *, cutoff=None):
         paging = " AND (j.at<%s OR (j.at=%s AND j.id<%s))"
         values.extend((cursor["at"], cursor["at"], before))
     rows = db.execute(
-        """SELECT j.id,j.at,j.kind,j.cents,j.terminal,purchase.id AS reverses,j.request_id FROM journal j
-           LEFT JOIN journal purchase ON purchase.id=j.reverses AND purchase.at>%s
+        """SELECT j.id,j.at,j.kind,j.cents,j.terminal,original.id AS reverses,original.kind AS reversed_kind,j.request_id FROM journal j
+           LEFT JOIN journal original ON original.id=j.reverses AND original.at>%s
            WHERE j.person=%s AND j.at>=%s AND j.at<%s AND j.at>%s""" + paging +
         " ORDER BY j.at DESC,j.id DESC LIMIT 51", values
     ).fetchall()

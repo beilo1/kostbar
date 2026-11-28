@@ -50,7 +50,7 @@ NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine ver
 
 ## Installation
 
-Für eine bestehende Installation führt [Update auf v40.1.0-rc.2](docs/UPDATE-v40.1.md) vom Import des Kandidaten über Sicherung, App- und Pi-Update bis zur Abnahme. Für eine Neuinstallation gelten die folgenden Schritte.
+Für eine bestehende Installation führt [Update auf v40.1.0-rc.3](docs/UPDATE-RC3.md) vom Patch über Sicherung und App-Wechsel bis zur Abnahme und Einrichtung des Saldenexports. Für eine Neuinstallation gelten die folgenden Schritte.
 
 | | QNAP | Synology |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ Für eine bestehende Installation führt [Update auf v40.1.0-rc.2](docs/UPDATE-v
 
 ### Neuinstallation
 
-Verwende den Quellstand, zu dem diese Anleitung gehört. Für einen noch nicht gemergten Kandidaten den [Branch aus dem Bundle importieren](docs/UPDATE-v40.1.md#frischen-checkout-in-powershell-anlegen) oder den veröffentlichten Refactoring-Branch auschecken. Wenn der Kandidat bereits in `main` gemergt ist, kannst du den entsprechenden Commit aus dem öffentlichen Repo verwenden. Vor dem Build den erwarteten Wert `40.1.0-rc.2` im Versionslabel des Dockerfiles und den ausgecheckten Commit prüfen.
+Verwende den Quellstand, zu dem diese Anleitung gehört. Für einen noch nicht gemergten Kandidaten den [Patch auf dem RC-Branch übernehmen](docs/UPDATE-RC3.md#1-änderungen-auf-dem-rc-branch-übernehmen) oder den veröffentlichten Refactoring-Branch auschecken. Wenn der Kandidat bereits in `main` gemergt ist, kannst du den entsprechenden Commit aus dem öffentlichen Repo verwenden. Vor dem Build den erwarteten Wert `40.1.0-rc.3` im Versionslabel des Dockerfiles und den ausgecheckten Commit prüfen.
 
 1. Das [gemeinsame App-Image bauen](#app-image-bereitstellen).
 2. Nach der passenden NAS-Anleitung eine neue Konfiguration erzeugen. Der Beispiel-Projektname für Docker Compose ist `kostbar`. Bei einer zusätzlichen Instanz einen eigenen Projektnamen sowie passende Bind-Adressen, Ports und Proxy-Ziele verwenden.
@@ -71,25 +71,25 @@ Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** 
 
 ### App-Image bereitstellen
 
-Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:40.1.0-rc.2`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
+Beide Deployment-Varianten verwenden standardmäßig das gemeinsame Image `kostbar-app:40.1.0-rc.3`. Führe den Build im Hauptordner für die Architektur des Ziel-NAS aus. Für ein x86-64-NAS kann bei einem Build auf ARM beispielsweise `--platform linux/amd64` verwendet werden, sofern der Builder diese Zielplattform unterstützt.
 
 ```bash
-docker build --pull -t kostbar-app:40.1.0-rc.2 .
-docker image save -o kostbar-app-40.1.0-rc.2.tar kostbar-app:40.1.0-rc.2
+docker build --pull -t kostbar-app:40.1.0-rc.3 .
+docker image save -o kostbar-app-40.1.0-rc.3.tar kostbar-app:40.1.0-rc.3
 ```
 
 Die Tar-Datei je Zielsystem einmal importieren. Für die Erstinstallation müssen auch `postgres:17-bookworm` und `caddy:2-alpine` lokal geladen oder erreichbar sein.
 
 ```bash
-sudo docker image load -i kostbar-app-40.1.0-rc.2.tar
-sudo docker image inspect kostbar-app:40.1.0-rc.2 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+sudo docker image load -i kostbar-app-40.1.0-rc.3.tar
+sudo docker image inspect kostbar-app:40.1.0-rc.3 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
 ```
 
 Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jeweiligen `.env` setzen und im NAS-Unterordner `sudo docker compose -p kostbar pull app` ausführen. Eine Referenz mit Digest legt den Build eindeutig fest.
 
 ### Upgrade einer bestehenden Installation
 
-Für eine laufende v39- oder v40-Instanz verwendet der Release-Kandidat die vorhandene Datenbank und Konfiguration. NAS-App und Pi lassen sich separat aktualisieren. Vorgehen, Abnahme und Rückweg stehen in der [Update-Anleitung](docs/UPDATE-v40.1.md).
+Für den Wechsel von RC2 zu RC3 stehen Vorgehen, Abnahme und Rückweg in der [Update-Anleitung](docs/UPDATE-RC3.md). Für ältere Installationen dokumentiert die [RC2-Anleitung](docs/UPDATE-v40.1.md) den vorherigen NAS- und Pi-Wechsel.
 
 Der Kandidat ergänzt Migration 7 (`manual_account_setup`) für manuell angelegte Konten. Für die Rückkehr zu einer App-Version mit Schema 6 wird der Datenbankstand vor dieser Migration benötigt. [NAS-Rückweg](docs/UPDATE-v40.1.md#nas-rückweg)
 

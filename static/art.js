@@ -17,12 +17,17 @@ const strokes = {
   bag: '<path d="M4 8h16l1 13H3L4 8Zm4 1V6a4 4 0 0 1 8 0v3"/>',
   check: '<path d="m4 12 5 5L20 6"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
+  up: '<path d="M12 19V5m-6 6 6-6 6 6"/>',
+  down: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+  chocolate: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 3v18M5 9h14M5 15h14"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>',
   plus: '<path d="M5 12h14m-7-7v14"/>',
   minus: '<path d="M5 12h14"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.1m4 0h.1m4 0h.1m4 0h.1M6 13h.1m12 0h.1M9 15h6"/>',
 };
-export const categoryIcons = { cold: 'glass', hot: 'cup', snack: 'snack', sweet: 'candy' };
+export const categoryIcons = {
+  drink: 'glass', cold: 'glass', hot: 'cup', snack: 'snack', sweet: 'candy', chocolate: 'chocolate',
+};
 export function icon(name, size = 24) {
   return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + strokes[name] + '</svg>';
 }
@@ -48,37 +53,17 @@ export function terminalArt() {
   </svg>`;
 }
 
-const palettes = {
-  water: ['#dfede8', '#77b7ab'], lemon: ['#eff0d6', '#cfcb62'], apple: ['#e4eed9', '#9bb767'],
-  energy: ['#e1e7f0', '#8ca9cf'], coffee: ['#eee4d7', '#b17958'], cappuccino: ['#f1e4d2', '#ce9875'],
-  milk: ['#e9e7df', '#b19880'], salami: ['#f0e3da', '#cf8975'], noodles: ['#f3e9d1', '#e3b858'],
-  pasta: ['#f1e3d6', '#d5926c'], bar: ['#eee3de', '#b98374'], wafer: ['#efe8d4', '#cfa366'],
-  candy: ['#e8e3ef', '#aa90ba'], cookie: ['#e0e9ee', '#8da9b9'],
+const artTones = {
+  water: 'sage', lemon: 'yellow', apple: 'sage', energy: 'gray', coffee: 'oat', cappuccino: 'oat',
+  milk: 'oat', cola: 'sage', limo: 'sage', salami: 'oat', noodles: 'oat', pasta: 'oat', chips: 'sage',
+  peanuts: 'oat', 'trail-mix': 'sage', cookie: 'oat', wafer: 'yellow', bar: 'oat', candy: 'sage',
+  'mr-tom': 'oat', hanuta: 'sage', 'knoppers-bar': 'oat', 'chocolate-bar': 'oat', 'chocolate-tablet': 'sage',
+  twix: 'oat', mentos: 'sage', maoam: 'oat', ballisto: 'oat', oreo: 'sage', 'double-biscuit': 'oat',
+  snickers: 'oat', mars: 'oat',
 };
-const bottle = '<path d="M-9-32h18v12c0 5 12 8 12 17v32c0 5-3 7-7 7h-28c-4 0-7-2-7-7V-3c0-9 12-12 12-17Z" fill="white"/><path d="M-20-2h40v23h-40Z" fill="ACC"/><rect x="-10" y="-38" width="20" height="9" rx="3" fill="ACC"/>';
-const mug = '<path d="M19-10h9a10 10 0 0 1 0 20H18" fill="none"/><path d="M-25-14h48v17c0 15-11 23-24 23S-25 18-25 3Z" fill="ACC"/><ellipse cx="-1" cy="-14" rx="24" ry="7" fill="#fff8eb"/><path d="M-11-28c-5-5 4-7 0-12m12 12c-5-5 4-7 0-12m12 12c-5-5 4-7 0-12M-27 30h52" fill="none"/>';
-const shapes = {
-  water: bottle + '<path d="M-7 11q3-7 7-3t7-3" fill="none"/>',
-  lemon: bottle + '<circle r="7" cy="9" fill="#fffae1"/><path d="M0 2v14m-7-7H7" fill="none"/>',
-  apple: bottle + '<path d="M0 6c-10-6-11 9-4 11l4-1 4 1c7-2 6-17-4-11Zm0 0q0-6 5-7" fill="#fcfae4"/>',
-  energy: '<rect x="-18" y="-34" width="36" height="68" rx="6" fill="ACC"/><path d="M-18-25h36m-36 50h36" fill="none"/><path d="m4-19-14 24H1l-5 14L12-6H1Z" fill="#fff2c7"/>',
-  coffee: mug, cappuccino: mug + '<path d="M-12 7h22" fill="none"/>',
-  milk: '<path d="M-17-26h34l-5 60h-24Z" fill="#fff8eb"/><path d="M-15-8h30l-2 22h-26Z" fill="ACC"/><path d="M-21-27h42M-14-33h28" fill="none"/>',
-  salami: '<path d="M-31-9h61l5-5v28l-5-5h-61l-5 5v-28Z" fill="ACC"/><path d="M-21-9v18m42-18v18m-13-9H-8" fill="none"/>',
-  noodles: '<path d="M-27 0h54c-2 15-11 25-27 25S-25 15-27 0Z" fill="ACC"/><path d="M-30 0h60M-17 0c2-12 12-13 14-22m-3 22c2-9 9-11 11-20m0 20c2-8 8-11 10-16m-35-1 42-17m-44 11 44-7" fill="none"/>',
-  pasta: '<path d="M-22-16h44l-7 45h-30Z" fill="ACC"/><rect x="-25" y="-22" width="50" height="7" rx="3" fill="#fff8eb"/><path d="M-14 4h28m-23 8h18" fill="none"/>',
-  bar: '<path d="m-33-16 8 3h50l8-3v32l-8-3h-50l-8 3Z" fill="ACC"/><path d="M-23-13v26m46-26v26M-11-3h22m-18 7h14" fill="none"/>',
-  wafer: '<rect x="-27" y="-17" width="54" height="35" rx="5" fill="ACC"/><path d="M-27-8h54m-54 9h54m-54 9h54m-38-27v35m12-35v35m12-35v35" fill="none"/>',
-  candy: '<path d="m-13-6-20-12 4 15-4 19 20-10m26-12 20-12-4 15 4 19-20-10" fill="ACC"/><ellipse rx="17" ry="15" fill="#fcf4ff"/><path d="M-7 4c2-9 10-9 13-4s-2 8-5 6" fill="none"/>',
-  cookie: '<circle r="28" fill="ACC"/><circle r="20" fill="none"/><path d="M0-9v18m-9-9H9m-15-6L6 6m0-12L-6 6" fill="none"/>',
-};
+
 export function productArt(key) {
-  const [paper, accent] = palettes[key] || palettes.bar;
-  const shape = (shapes[key] || shapes.bar).replaceAll('ACC', accent);
-  return `<svg class="product-art" viewBox="0 0 132 82" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-    <rect width="132" height="82" fill="${paper}"/><circle cx="66" cy="43" r="33" fill="white" opacity=".35"/>
-    <path d="M23 23h8m-4-4v8m76 29h8m-4-4v8M30 64h3m67-49h3" stroke="#203e32" stroke-opacity=".33" stroke-linecap="round"/>
-    <ellipse cx="66" cy="73" rx="25" ry="3" fill="#26382f" opacity=".12"/>
-    <g transform="translate(66 41) scale(.79) rotate(-11)" stroke="#243b31" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${shape}</g>
-  </svg>`;
+  const name = Object.hasOwn(artTones, key) ? key : 'bar';
+  return `<img class="product-art product-art--image" data-tone="${artTones[name]}"
+    src="/static/products/${name}.webp" width="175" height="155" alt="" decoding="async" draggable="false">`;
 }

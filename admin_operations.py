@@ -22,6 +22,37 @@ class KioskInvalidation:
     cancel_capture: bool = False
 
 
+def lock_product_order(db):
+    db.execute("SELECT pg_advisory_xact_lock(739310484)")
+
+
+def next_product_position(db):
+    return db.execute("SELECT COALESCE(MAX(sort_position),0)+1 AS position FROM products").fetchone()["position"]
+
+
+def move_product(db, body, actor):
+    group = body.get("group")
+    if not isinstance(group, str) or group not in data.PRODUCT_ORDER_GROUPS:
+        raise data.Problem(400, "Ungültige Sortimentsgruppe.")
+    product = number(body.get("id"), 1, 2**53 - 1, "Produkt")
+    neighbor = number(body.get("neighbor"), 1, 2**53 - 1, "Nachbarprodukt")
+    lock_product_order(db)
+    rows = db.execute("""SELECT id,sort_position FROM products WHERE deleted=0 AND category=ANY(%s)
+                         ORDER BY sort_position,id""", (list(data.PRODUCT_ORDER_GROUPS[group]),)).fetchall()
+    positions = {row["id"]: index for index, row in enumerate(rows)}
+    left, right = positions.get(product), positions.get(neighbor)
+    if left is None or right is None or abs(left - right) != 1:
+        raise data.Problem(409, "Die Reihenfolge hat sich geändert. Lade das Sortiment neu.")
+    # Reassign only the two ranks. Migration and product writes give each rank
+    # a unique value within a group.
+    db.execute("""UPDATE products SET sort_position=CASE WHEN id=%s THEN %s ELSE %s END
+                  WHERE id IN (%s,%s)""",
+               (product, rows[right]["sort_position"], rows[left]["sort_position"], product, neighbor))
+    data.audit(db, actor, f"Sortimentsreihenfolge geändert ({group}).",
+               {"Produkt": product, "Position": left + 1},
+               {"Produkt": product, "Position": right + 1})
+
+
 def save_product(db, body, actor, labels):
     name = string(body.get("name"), 80, "Produktname")
     category, icon = body.get("category"), body.get("icon")
@@ -37,16 +68,22 @@ def save_product(db, body, actor, labels):
             or len(set(sites)) != len(sites)):
         raise data.Problem(400, "Ungültige Auswahl der Verkaufspunkte.")
     values = (category, name, cents, icon, active)
+    lock_product_order(db)
     before = None
     if body.get("id") is None:
         product = db.execute(
-            "INSERT INTO products (category,name,cents,icon,active) VALUES (%s,%s,%s,%s,%s) RETURNING id", values
+            "INSERT INTO products (category,name,cents,icon,active,sort_position) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+            (*values, next_product_position(db))
         ).fetchone()["id"]
     else:
         product = number(body["id"], 1, 2**31 - 1, "Produkt")
         before = data.product_snapshot(db, product, labels)
-        if not db.execute("UPDATE products SET category=%s,name=%s,cents=%s,icon=%s,active=%s WHERE id=%s",
-                          (*values, product)).rowcount:
+        current = db.execute("SELECT category,sort_position FROM products WHERE id=%s", (product,)).fetchone()
+        same_group = any(category in members and current["category"] in members
+                         for members in data.PRODUCT_ORDER_GROUPS.values())
+        rank = current["sort_position"] if same_group else next_product_position(db)
+        if not db.execute("""UPDATE products SET category=%s,name=%s,cents=%s,icon=%s,active=%s,sort_position=%s
+                             WHERE id=%s AND deleted=0""", (*values, rank, product)).rowcount:
             raise data.Problem(404, "Produkt nicht gefunden.")
     db.execute("DELETE FROM product_terminals WHERE product=%s", (product,))
     with db.cursor() as cursor:
@@ -64,6 +101,7 @@ def set_product_status(db, body, actor, labels):
 
 
 def hide_product(db, body, actor, labels):
+    lock_product_order(db)
     product = number(body.get("id"), 1, 2**31 - 1, "Produkt")
     before = data.product_snapshot(db, product, labels)
     # Keep the product ID for journal items and monthly reports.
@@ -164,28 +202,35 @@ def adjust_balance(db, body, actor):
                    booking_detail=True, person=person, at=at)
 
 
-def reverse_purchase(db, body, actor):
+def reverse_booking(db, body, actor):
     target = number(body.get("id"), 1, 2**53 - 1, "Buchung")
     note = string(body.get("note"), 240, "Begründung")
     account = db.execute("""SELECT p.id FROM people p JOIN journal j ON j.person=p.id
-                            WHERE j.id=%s AND j.kind='purchase' FOR NO KEY UPDATE OF p""",
+                            WHERE j.id=%s AND j.kind IN ('purchase','payment','correction') FOR NO KEY UPDATE OF p""",
                          (target,)).fetchone()
     if not account:
-        raise data.Problem(404, "Kauf nicht gefunden.")
-    original = db.execute("SELECT * FROM journal WHERE id=%s AND kind='purchase' AND at>%s FOR UPDATE",
+        raise data.Problem(404, "Buchung nicht gefunden.")
+    original = db.execute("SELECT * FROM journal WHERE id=%s AND at>%s FOR UPDATE",
                           (target, data.booking_cutoff())).fetchone()
     if not original:
-        raise data.Problem(404, "Kauf nicht gefunden.")
-    if db.execute("SELECT id FROM journal WHERE reverses=%s", (target,)).fetchone():
-        raise data.Problem(409, "Dieser Kauf wurde bereits storniert.")
+        raise data.Problem(404, "Buchung nicht gefunden.")
+    reversed_by = db.execute("SELECT actor,note FROM journal WHERE reverses=%s", (target,)).fetchone()
+    if reversed_by:
+        if (reversed_by["actor"], reversed_by["note"]) == (actor, note):
+            return
+        raise data.Problem(409, "Diese Buchung wurde bereits storniert.")
     at = data.now()
     data.entry(db, original["person"], "reversal", -original["cents"], actor, note, reverses=target,
                terminal=original["terminal"], at=at, loyalty_delta=-original["loyalty_delta"])
-    redeemed = sum(line["qty"] for line in data.purchase_bonus(db, target))
-    data.update_loyalty(db, original["person"], -original["loyalty_delta"], redeemed_delta=-redeemed)
-    data.add_monthly_sale(db, original["terminal"], at, -original["cents"], target, reversal=True)
-    data.audit(db, actor, f"Kauf #{target} storniert.", {"Status": "Gebucht"},
-               {"Status": "Storniert", "Gutschrift (Cent)": -original["cents"], "Begründung": note},
+    db.execute("UPDATE journal SET kiosk_pending=FALSE WHERE id=%s AND kiosk_pending", (target,))
+    if original["kind"] == "purchase":
+        redeemed = sum(line["qty"] for line in data.purchase_bonus(db, target))
+        data.update_loyalty(db, original["person"], -original["loyalty_delta"], redeemed_delta=-redeemed)
+        data.add_monthly_sale(db, original["terminal"], at, -original["cents"], target, reversal=True)
+    elif original["kind"] == "payment":
+        db.execute("UPDATE paypal_requests SET kiosk_pending=FALSE WHERE journal_id=%s AND kiosk_pending", (target,))
+    data.audit(db, actor, f"{finance.KINDS[original['kind']]} #{target} storniert.", {"Status": "Gebucht"},
+               {"Status": "Storniert", "Gegenbuchung (Cent)": -original["cents"], "Begründung": note},
                booking_detail=True, person=original["person"], at=at)
 
 

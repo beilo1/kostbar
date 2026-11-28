@@ -1,7 +1,11 @@
 import {categoryIcons, icon, productArt} from './art.js';
 import {esc, euro} from './shared.js';
 
-const shopIcons = Object.keys(categoryIcons);
+export const terminalCategories = {drink: 'Getränke', snack: 'Snacks', sweet: 'Süßes', chocolate: 'Schokoladiges'};
+
+export function terminalCategory(category) {
+  return category === 'cold' || category === 'hot' ? 'drink' : category;
+}
 
 export function shopMarkup(hasLoyalty) {
   return `<div class="shop-layout"><section class="menu-area">
@@ -30,11 +34,11 @@ export function shopMarkup(hasLoyalty) {
 export function showCatalog(screen, catalog, category) {
   const tabs = screen.querySelector('#categories');
   if (!tabs) return;
-  tabs.innerHTML = shopIcons.map(key =>
-    `<button class="category-tab" data-category="${key}" aria-pressed="${key === category}">${icon(categoryIcons[key], 20)}<span>${esc(catalog.categories[key] || '')}</span></button>`
+  tabs.innerHTML = Object.entries(terminalCategories).map(([key, label]) =>
+    `<button class="category-tab" data-category="${key}" aria-pressed="${key === category}">${icon(categoryIcons[key], 20)}<span>${esc(label)}</span></button>`
   ).join('');
-  screen.querySelector('#category-title').textContent = catalog.categories[category] || 'Sortiment';
-  const products = catalog.products.filter(p => p.category === category);
+  screen.querySelector('#category-title').textContent = terminalCategories[category] || 'Sortiment';
+  const products = catalog.products.filter(p => terminalCategory(p.category) === category);
   screen.querySelector('#category-count').textContent = products.length === 1 ? '1 Produkt' : products.length + ' Produkte';
   screen.querySelector('#products').innerHTML = products.length ? products.map(p =>
     `<button class="product-card" data-add="${p.id}" aria-label="${esc(p.name)}, ${esc(euro(p.cents))}, hinzufügen">

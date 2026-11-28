@@ -33,13 +33,17 @@ def paypal_qr(link):
 
 def cash(db, person, terminal, key, cents):
     key = "cash:" + key
-    row = db.execute("SELECT id,cents,terminal,at>%s AS fresh FROM journal WHERE person=%s AND request_id=%s",
+    row = db.execute("""SELECT j.id,j.cents,j.terminal,j.at>%s AS fresh,r.id AS reversed_by
+                        FROM journal j LEFT JOIN journal r ON r.reverses=j.id
+                        WHERE j.person=%s AND j.request_id=%s""",
                      (store.booking_cutoff(), person, key)).fetchone()
     if row:
         if not row["fresh"]:
             raise store.Problem(409, "Diese Buchungskennung ist abgelaufen.")
         if row["terminal"] != terminal or row["cents"] != cents:
             raise store.Problem(409, "Diese Vorgangskennung gehört zu einer anderen Zahlung.")
+        if row["reversed_by"]:
+            raise store.Problem(409, "Diese Barzahlung wurde storniert.")
         booking = row["id"]
     else:
         booking = store.entry(db, person, "payment", cents, note="Barzahlung am Terminal (Selbsteintrag)",
@@ -81,8 +85,9 @@ def paypal_for_person(db, person):
 def paypal_overview(db, status, before):
     rows = [dict(row) for row in db.execute(
         """SELECT r.id,r.reference,r.terminal,r.cents,r.created,r.status,r.resolved,r.actor,r.note,r.transaction_ref,r.recipient_link,
-                  p.first,p.last,p.department,j.cents AS credited
+                  p.first,p.last,p.department,j.cents AS credited,j.id AS booking,reversal.id AS reversed_by
            FROM paypal_requests r JOIN people p ON p.id=r.person LEFT JOIN journal j ON j.id=r.journal_id
+           LEFT JOIN journal reversal ON reversal.reverses=j.id
            WHERE r.status=%s AND r.id<%s AND COALESCE(r.resolved,r.created)>%s
            ORDER BY r.id DESC LIMIT 51""", (status, before, store.booking_cutoff())
     )]
@@ -252,7 +257,7 @@ def account_export(db, person, terminals, stamp):
     carried = store.carried_balance(db, person) + int(db.execute(
         "SELECT COALESCE(SUM(cents),0) AS total FROM journal WHERE person=%s AND at<=%s", (person, cutoff)
     ).fetchone()["total"])
-    entries = db.execute("""SELECT j.id,j.kind,j.cents,j.at,j.note,purchase.id AS reverses,j.terminal
+    entries = db.execute("""SELECT j.id,j.kind,j.cents,j.at,j.note,purchase.id AS reverses,purchase.kind AS reversed_kind,j.terminal
                           FROM journal j LEFT JOIN journal purchase ON purchase.id=j.reverses AND purchase.at>%s
                           WHERE j.person=%s AND j.at>%s ORDER BY j.id""", (cutoff, person, cutoff)).fetchall()
     details = {}
@@ -279,7 +284,8 @@ def account_export(db, person, terminals, stamp):
         i += 1
     for row in entries:
         balance += row["cents"]
-        label = (f"Zu Kauf #{row['reverses']} · " if row["reverses"] else "") + (row["note"] or "")
+        reference = f"Zu {KINDS[row['reversed_kind']]} #{row['reverses']} · " if row["reverses"] else ""
+        label = reference + (row["note"] or "")
         terminal = terminals.get(row["terminal"], "")
         sheet.set_row(i, 15 * max(math.ceil(len(label) / 30), math.ceil(len(terminal) / 17), 1))
         sheet.write_datetime(i, 0, local_date(row["at"]).replace(tzinfo=None), style["band_date"])

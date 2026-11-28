@@ -131,8 +131,8 @@ export function createKioskDialog({state, apply, book, cancelManual, request = a
       : (preview ? 'Gib einen Testbetrag ein und erzeuge eine Testreferenz.'
         : 'Erzeuge eine Referenz. Gib sie beim Bezahlen am Handy als Nachricht ein.')) +
       `${cash ? '' : '<div class="paypal-layout">'}
-      <form id="payment-form" data-method="${method}"${cash ? ` data-limit="${cashMax}"` : ''}>
-        <label class="amount-entry">Betrag in Euro<input name="amount" type="text" inputmode="none" maxlength="9" required
+      <form id="payment-form" autocomplete="off" data-method="${method}"${cash ? ` data-limit="${cashMax}"` : ''}>
+        <label class="amount-entry">Betrag in Euro<input name="amount" type="text" inputmode="none" maxlength="9" autocomplete="off" spellcheck="false" required
           value="${open ? esc(((cash ? Math.min(open, cashMax) : open) / 100).toFixed(2).replace('.', ',')) : ''}" placeholder="0,00"></label>
         ${cash ? `<p class="hint cash-limit">Maximal ${euro(cashMax)} je Vorgang</p>` : ''}
         ${keypad({numeric: true})}${errors()}

@@ -1,7 +1,8 @@
 import { formattedTerms, standLabel, termsText } from './terms.js';
 import { downloadPrintDocument, termsPrintDate } from './print-export.js';
 import { technicalPanel } from './technical-docs.js';
-import { categoryIcons, icon } from './art.js';
+import { categoryIcons, icon, productArt } from './art.js';
+import { terminalCategories, terminalCategory } from './shop-view.js';
 import { api, dateTime, esc, euro, eurosToCents, idempotencyKey, notify, personLabel } from './shared.js';
 import { columnHeading, table } from './ui-table.js';
 
@@ -18,7 +19,7 @@ const navigation = [
   ['Verwaltung', ['admins', 'terms', 'privacy', 'audit', 'technical']],
 ];
 const kinds = {purchase: 'Kauf', payment: 'Zahlung', correction: 'Korrektur', reversal: 'Storno'};
-const iconDefaults = {cold: 'water', hot: 'coffee', snack: 'salami', sweet: 'bar'};
+const iconDefaults = {cold: 'water', hot: 'coffee', snack: 'salami', sweet: 'candy', chocolate: 'chocolate-bar'};
 const peopleSortKeys = {Name: 'last', Vorname: 'first', Referat: 'department', Saldo: 'balance'};
 let session = null;
 let summary;
@@ -212,11 +213,11 @@ function journalPanel() {
     }).join('<br>');
     const note = !items || j.kind === 'reversal' ? esc(j.note || '') : '';
     const details = [items, note].filter(Boolean).join('<br>');
-    const reference = j.reverses ? `<small>Zu Kauf #${j.reverses}</small>` : j.reversed_by ? `<small>Storno #${j.reversed_by}</small>` : '';
+    const reference = j.reverses ? `<small>Zu ${kinds[j.reversed_kind] || 'Kauf'} #${j.reverses}</small>` : j.reversed_by ? `<small>Storno #${j.reversed_by}</small>` : '';
     const tone = j.kind === 'purchase' ? ' good' : j.kind === 'reversal' ? ' danger' : '';
     return `<tr><td><strong>#${j.id}</strong><small>${dateTime(j.at)}</small></td><td>${personName(j)}</td><td>${j.terminal ? esc(historicalSites()[j.terminal]) : '—'}</td>
       <td><span class="pill${tone}">${kinds[j.kind]}</span>${reference}</td><td>${details}${j.actor ? '<small>Von ' + esc(j.actor) + '</small>' : ''}</td>
-      <td class="num">${amount(j.cents)}</td><td>${j.kind === 'purchase' && !j.reversed_by ? rowAction('reverse', j.id, 'Stornieren', 'undo', 'danger') : ''}</td></tr>`;
+      <td class="num">${amount(j.cents)}</td><td>${j.kind !== 'reversal' && !j.reversed_by ? rowAction('reverse', j.id, 'Stornieren', 'undo', 'danger') : ''}</td></tr>`;
   }).join('');
   return `<div class="panel-heading"><div><h2>Kassenbuch</h2><p>Einzelbuchungen der letzten 90 Tage.</p></div>
     <div class="journal-filters journal-controls">
@@ -316,22 +317,36 @@ function peoplePanel() {
     <div id="people-table">${drawPeopleTable()}</div>`;
 }
 
+function productMoveButton(product, neighbor, direction) {
+  const label = direction === 'up' ? 'Nach oben' : 'Nach unten';
+  return `<button type="button" class="button outline compact product-move" data-product-move="${product.id}"
+    data-neighbor="${neighbor?.id ?? ''}" aria-label="${esc(product.name)} · ${label}" title="${label}"
+    ${neighbor ? '' : 'disabled'}>${icon(direction, 16)}</button>`;
+}
+
 function productsPanel() {
-  const products = productsView.products.filter(p => productCategory === 'all' || p.category === productCategory);
-  const filters = Object.entries({all: 'Alle', ...productsView.categories}).map(([key, label]) =>
+  const canReorder = Object.hasOwn(terminalCategories, productCategory);
+  const products = productsView.products.filter(p => productCategory === 'all' ||
+    (canReorder ? terminalCategory(p.category) : p.category) === productCategory);
+  const {cold, hot, ...other} = productsView.categories;
+  const filters = Object.entries({all: 'Alle', drink: terminalCategories.drink, cold, hot, ...other}).map(([key, label]) =>
     `<button type="button" data-product-category="${key}" aria-pressed="${key === productCategory}">${key === 'all' ? '' : icon(categoryIcons[key], 16) + ' '}${esc(label)}</button>`
   ).join('');
-  const rows = products.map(p => `<tr><td><strong>${esc(p.name)}</strong></td>
+  const rows = products.map((p, index) => `<tr><td><strong>${esc(p.name)}</strong></td>
     <td><span class="category-cell">${icon(categoryIcons[p.category], 18)} ${esc(productsView.categories[p.category])}</span></td>
     <td class="num">${amount(p.cents)}</td><td>${p.terminals.map(site => esc(sites.terminals[site])).join(', ') || 'Keiner'}</td>
     <td><span class="pill ${p.active && p.terminals.length ? 'good' : 'off'}">${p.active ? (p.terminals.length ? 'Im Sortiment' : 'Ohne Zuordnung') : 'Archiviert'}</span></td>
     <td class="row-actions">${rowAction('product', p.id, 'Bearbeiten', 'edit')}
     ${rowAction('archive', p.id, p.active ? 'Archivieren' : 'Reaktivieren', p.active ? 'close' : 'undo', p.active ? 'warn' : 'good')}
-    ${session.super_admin ? rowAction('delete-product', p.id, 'Dauerhaft ausblenden', 'trash', 'danger') : ''}</td></tr>`).join('');
+    ${session.super_admin ? rowAction('delete-product', p.id, 'Dauerhaft ausblenden', 'trash', 'danger') : ''}</td>
+    ${canReorder ? `<td><div class="product-moves">${productMoveButton(p, products[index - 1], 'up')}
+      ${productMoveButton(p, products[index + 1], 'down')}</div></td>` : ''}</tr>`).join('');
   return `<div class="panel-heading"><div><h2>Sortiment</h2><p>Produkte, Kategorien und Preise pflegen.</p></div>
     <button class="button primary compact" data-new>${icon('plus', 18)} Neues Produkt</button></div>
     <nav class="admin-tabs product-filters" aria-label="Sortiment nach Kategorie filtern">${filters}</nav>
-    ${table(['Produkt', 'Kategorie', 'Preis', 'Verkaufspunkte', 'Status', 'Aktionen'], rows, 'Keine Produkte in dieser Auswahl.')}`;
+    ${canReorder ? '<p class="hint product-order-hint">Mit den Pfeilen legst du die Reihenfolge am Terminal fest.</p>' : ''}
+    ${table(['Produkt', 'Kategorie', 'Preis', 'Verkaufspunkte', 'Status', 'Aktionen',
+      ...(canReorder ? ['Reihenfolge'] : [])], rows, 'Keine Produkte in dieser Auswahl.')}`;
 }
 
 function paymentsPanel() {
@@ -341,8 +356,10 @@ function paymentsPanel() {
     <td class="row-actions">${p.status === 'pending' ?
       rowAction('paypal-confirm', p.id, 'Eingang bestätigen', 'check', 'good') +
       rowAction('paypal-reject', p.id, 'Ablehnen', 'close', 'danger') :
-      `<span class="pill ${p.status === 'confirmed' ? 'good' : 'off'}">${labels[p.status]}</span>
-       ${p.credited != null ? amount(p.credited) : ''}<small>${dateTime(p.resolved)} · ${esc(p.actor)}
+      `<span class="pill ${p.reversed_by ? 'danger' : p.status === 'confirmed' ? 'good' : 'off'}">${p.reversed_by ? 'Storniert' : labels[p.status]}</span>
+       ${p.credited != null ? amount(p.credited) : ''}
+       ${p.booking && !p.reversed_by ? rowAction('paypal-storno', p.booking, 'Stornieren', 'undo', 'danger') : ''}
+       ${p.reversed_by ? `<small>Storno #${p.reversed_by}</small>` : ''}<small>${dateTime(p.resolved)} · ${esc(p.actor)}
        ${p.transaction_ref ? '<br>Transaktion ' + esc(p.transaction_ref) : ''}${p.note ? '<br>' + esc(p.note) : ''}</small>`}</td></tr>`).join('');
   return `<div class="panel-heading"><div><h2>PayPal-Zahlungen</h2><p>Vergleiche die Referenz mit dem tatsächlichen Zahlungseingang in PayPal.</p></div>
     <label class="filter">Status<select id="payment-status">${options(labels, paymentStatus)}</select></label></div>
@@ -741,18 +758,44 @@ function historicalSites() {
 
 function editProduct(id) {
   const p = productsView.products.find(product => product.id === id);
+  const selected = p?.icon || iconDefaults.cold;
+  const choices = Object.entries(productsView.icons).map(([key, label]) => `
+    <label class="product-option"><input type="radio" name="icon" value="${esc(key)}"
+      ${key === selected ? 'checked' : ''} required>
+      <span class="product-option-tile">${productArt(key)}<span>${esc(label)}</span></span></label>`).join('');
   modal(p ? 'Produkt bearbeiten' : 'Produkt hinzufügen',
-    `<label>Produktname<input name="name" maxlength="80" value="${esc(p?.name)}" required></label>
+    `<div class="product-editor-layout"><div class="product-editor-fields"><label>Produktname<input name="name" maxlength="80" value="${esc(p?.name)}" required></label>
      <div class="field-pair"><label>Kategorie<select name="category">${options(productsView.categories, p?.category)}</select></label>
-     <label>Symbol<select name="icon">${options(productsView.icons, p?.icon)}</select></label></div>
-     <label>Preis in Euro<input name="price" inputmode="decimal" value="${p ? (p.cents / 100).toFixed(2).replace('.', ',') : ''}" placeholder="0,50" required></label>
+       <label>Preis in Euro<input name="price" inputmode="decimal"
+         value="${p ? (p.cents / 100).toFixed(2).replace('.', ',') : ''}" placeholder="0,50" required></label></div>
      <fieldset class="location-options"><legend>Verfügbar an</legend>${Object.entries(sites.terminals).map(([id, label]) =>
         `<label class="check-field"><input type="checkbox" name="terminal" value="${id}" ${p?.terminals.includes(id) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</fieldset>
-     <label class="check-field"><input type="checkbox" name="active" ${p?.active === 0 ? '' : 'checked'}> Im Sortiment anzeigen</label>`,
+     <label class="check-field"><input type="checkbox" name="active" ${p?.active === 0 ? '' : 'checked'}> Im Sortiment anzeigen</label>
+     <figure class="product-editor-preview"><figcaption>Vorschau am Terminal</figcaption><div id="product-preview-tile"></div></figure></div>
+     <fieldset class="product-icon-picker"><legend>Produktbild</legend><div class="product-icon-grid">${choices}</div></fieldset></div>`,
     'Speichern', fields => api('/api/admin/product', {
       id: p?.id, name: fields.get('name'), category: fields.get('category'), icon: fields.get('icon'),
       cents: eurosToCents(fields.get('price')), active: fields.has('active'), terminals: fields.getAll('terminal'),
     }));
+  const form = editor.querySelector('#edit-form');
+  const preview = form.querySelector('#product-preview-tile');
+  let iconChosen = Boolean(p);
+  function updatePreview() {
+    const values = new FormData(form);
+    let price = '–';
+    try { price = euro(eurosToCents(values.get('price'))); } catch { /* Incomplete input while typing. */ }
+    preview.innerHTML = `<div class="product-card">${productArt(values.get('icon'))}
+      <span class="product-info"><strong>${esc(values.get('name').trim() || 'Produktname')}</strong>
+      <span class="product-price">${esc(price)}</span><span class="product-add">${icon('plus', 19)}</span></span></div>`;
+  }
+  form.addEventListener('input', event => {
+    if (event.target.name === 'icon') iconChosen = true;
+    if (event.target.name === 'category' && !iconChosen) {
+      form.elements.icon.value = iconDefaults[event.target.value];
+    }
+    updatePreview();
+  });
+  updatePreview();
 }
 
 function deleteProduct(id) {
@@ -803,10 +846,13 @@ function bookPerson(id) {
       cents: eurosToCents(fields.get('value').replace('−', '-'))}));
 }
 
-function reverseEntry(id) {
-  const entry = journal.entries.find(row => row.id === id);
-  modal('Kauf stornieren',
-    `<p>Für Buchung #${id} werden ${euro(-entry.cents)} gutgeschrieben. Der Kauf bleibt im Kassenbuch sichtbar.</p>
+function reverseEntry(id, paypalRow) {
+  const entry = paypalRow ? {kind: 'payment', cents: paypalRow.credited} : journal.entries.find(row => row.id === id);
+  const paypal = Boolean(paypalRow) || entry.note?.startsWith('PayPal bestätigt');
+  modal(kinds[entry.kind] + ' stornieren',
+    `<p>Die Gegenbuchung zu #${id} beträgt <strong>${amount(-entry.cents)}</strong>.
+       Beide Buchungen bleiben im Kassenbuch sichtbar.</p>
+     ${paypal ? '<p class="hint">Falls Geld zurückfließen soll, veranlasse die Rückzahlung separat in PayPal.</p>' : ''}
      <label>Begründung<input name="note" maxlength="240" required></label>`,
     'Storno buchen', fields => api('/api/admin/reverse', {id, note: fields.get('note')}));
 }
@@ -1022,10 +1068,26 @@ document.addEventListener('click', async event => {
       sessionTimer();
     }
     if (d.productCategory) { productCategory = d.productCategory; render(); }
+    if (d.productMove && d.neighbor) {
+      try {
+        await api('/api/admin/product-order', {group: productCategory, id: Number(d.productMove), neighbor: Number(d.neighbor)});
+      } catch (error) {
+        if (error.status !== 409) throw error;
+        notify(error.message);
+      }
+      await loadTab();
+      render();
+      admin.querySelector(`[data-product-move="${d.productMove}"]:enabled`)?.focus();
+      sessionTimer();
+    }
     if ('more' in d) { await loadJournal(true); render(); }
     if ('paypalMore' in d) { await loadPayments(true); render(); sessionTimer(); }
     if (d.paypalConfirm) resolvePaypal(Number(d.paypalConfirm), true);
     if (d.paypalReject) resolvePaypal(Number(d.paypalReject), false);
+    if (d.paypalStorno) {
+      const booking = Number(d.paypalStorno);
+      reverseEntry(booking, payments.payments.find(row => row.booking === booking));
+    }
     if ('paypalSettings' in d) editPaypalSettings();
     if (d.resetPin) resetPin(Number(d.resetPin));
     if ('addAdmin' in d) editAdmin();
@@ -1058,9 +1120,6 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('change', async event => {
-  if (event.target.name === 'category' && editor.open && editor.querySelector('[name=icon]')) {
-    editor.querySelector('[name=icon]').value = iconDefaults[event.target.value];
-  }
   const field = event.target;
   const filters = {
     'journal-terminal': () => { selectedTerminal = field.value; return loadJournal(); },

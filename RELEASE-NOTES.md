@@ -1,6 +1,14 @@
 # KoSTbar 40.1.0 · Release Notes
 
-Vergleich mit dem öffentlichen main-Stand v38.0.1 (ba8bc6a). Die Änderungen umfassen den importierten Stand v40.0.2 und alle darauf folgenden Anpassungen. Zur Abnahme steht 40.1.0-rc.2 bereit.
+Vergleich mit dem öffentlichen main-Stand v38.0.1 (ba8bc6a). Die Änderungen umfassen den importierten Stand v40.0.2 und alle darauf folgenden Anpassungen. Zur Abnahme steht 40.1.0-rc.3 bereit.
+
+## Neu in 40.1.0-rc.3
+
+- Das Kassenbuch kann Einkäufe, Zahlungen und Saldenkorrekturen mit einer verknüpften Gegenbuchung stornieren. PayPal-Zahlungen behalten ihre Transaktionsreferenz.
+- Die Produktanlage und -bearbeitung bieten 32 Bilder mit einer Vorschaukachel. Die Reihenfolge lässt sich je Terminal-Kategorie im Sortiment ändern. Das Terminal zeigt Kalt- und Heißgetränke zusammen an. Die Sammelkarte zählt weiterhin nur Heißgetränke. „Süßes“ und „Schokoladiges“ stehen als getrennte Kategorien bereit.
+- Die Startseite zeigt das NFC Forum N-Mark und einen Pfeil zum Kartenleser. Das Betragsformular schaltet Formularvorschläge ab. Die Abmeldezeiten betragen 20 Sekunden bei Inaktivität, 10 Sekunden nach einem Kauf und 8 Sekunden nach einer Barzahlung.
+- Der NAS-Host kann die Saldenliste täglich um 23 Uhr als XLSX sichern und alte Exportdateien nach 90 Tagen bereinigen. Der [Update-Leitfaden](docs/UPDATE-RC3.md) enthält Befehle für QNAP und Synology.
+- Schema-Migration 8 übernimmt die bestehende Reihenfolge und ordnet bekannte Schokoladenprodukte und Produktsymbole zu. Das NFC-Zeichen stammt aus [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:NFC_logo.svg), SVG von Eg0rk0t323 unter CC0 1.0. Das N-Mark ist ein Kennzeichen des NFC Forum.
 
 ## Verwaltung und API
 
@@ -13,7 +21,6 @@ Vergleich mit dem öffentlichen main-Stand v38.0.1 (ba8bc6a). Die Änderungen um
 
 ## Terminal und Hinweise
 
-- Der Kaufbeleg bleibt acht Sekunden sichtbar. Der Barzahlungsbeleg bleibt fünf Sekunden sichtbar.
 - Die PIN-Anmeldung liefert nach erfolgreicher Prüfung das Sortiment mit. Suchtreffer haben mehr Abstand zum Eingabefeld. Dialoge haben einen eigenen Kopfbereich und scrollbaren Inhalt. Im PayPal-Dialog stehen Betragseingabe und QR-Code bei ausreichender Breite nebeneinander.
 - Nutzungsbedingungen und Datenschutzerklärung öffnen sich breiter. **Projekt und Lizenz** ist in den Nutzungshinweisen und über die Fußzeile erreichbar. Beide Ansichten laden dieselbe MIT-Lizenz lokal und zeigen sie in Absätzen. Der Druckexport enthält den Projektverweis mit eingebettetem QR-Code.
 

@@ -34,11 +34,11 @@ DEVICE_COOKIE = "__Host-kk_device"
 PAIR_LIFETIME = 300
 READER_LIFETIME = 10
 DEVICE_LIFETIME = 34560000
-SESSION_IDLE = 15
+SESSION_IDLE = 20
 MANUAL_WINDOW = 900
 MANUAL_LIMIT = 5
-RECEIPT_SECONDS = 8
-CASH_RECEIPT_SECONDS = 5
+RECEIPT_SECONDS = 10
+CASH_RECEIPT_SECONDS = 8
 TERMINAL_ONLINE_SECONDS = 10
 TERMINAL_ADMIN_ACTIONS = ("/api/admin/terminal-create", "/api/admin/terminal", "/api/admin/terminal-delete",
                           "/api/admin/terminal-profile", "/api/admin/kiosk-pair", "/api/admin/kiosk-unpair")
@@ -1043,6 +1043,8 @@ class App:
         with data.connect(self.db) as db:
             if path == "/api/admin/product":
                 admin_operations.save_product(db, body, actor, self.terminal_labels())
+            elif path == "/api/admin/product-order":
+                admin_operations.move_product(db, body, actor)
             elif path == "/api/admin/product-status":
                 admin_operations.set_product_status(db, body, actor, self.terminal_labels())
             elif path == "/api/admin/delete-product":
@@ -1060,7 +1062,7 @@ class App:
             elif path == "/api/admin/adjust":
                 admin_operations.adjust_balance(db, body, actor)
             elif path == "/api/admin/reverse":
-                admin_operations.reverse_purchase(db, body, actor)
+                admin_operations.reverse_booking(db, body, actor)
             else:
                 raise data.Problem(404, "Seite nicht gefunden.")
         if invalidate:
@@ -1347,6 +1349,7 @@ def main():
     sub.add_parser("serve").add_argument("--port", type=int, default=8765)
     sub.add_parser("migrate", help="Datenbankschema transaktional aktualisieren.")
     sub.add_parser("schema-status", help="Angewendete Datenbankmigrationen anzeigen.")
+    sub.add_parser("export-balances", help="Tagesaktuelle Saldenliste als XLSX auf die Standardausgabe schreiben.")
     for command in ("set-super-admin", "set-admin", "remove-admin"):
         sub.add_parser(command).add_argument("name")
     args = parser.parse_args()
@@ -1359,6 +1362,11 @@ def main():
     elif args.command == "migrate":
         data.initialize(db_source, cfg.get("terminals", {}), terms_document(cfg))
         print(f"Datenbankschema bereit: Version {schema_migrations.LATEST_VERSION}.")
+    elif args.command == "export-balances":
+        with data.connect(db_source, snapshot=True) as db:
+            stamp = finance.local_date(datetime.now(timezone.utc))
+            export = finance.balances_export(db, stamp)
+        sys.stdout.buffer.write(export.content)
     elif args.command == "schema-status":
         with data.connect(db_source) as db:
             rows = schema_migrations.schema_status(db)

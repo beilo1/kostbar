@@ -280,6 +280,39 @@ MIGRATIONS = (
         ALTER TABLE people ALTER COLUMN card DROP NOT NULL;
         ALTER TABLE manual_credentials ADD COLUMN temporary BOOLEAN NOT NULL DEFAULT FALSE;
     """),
+    Migration(8, "catalog_categories_and_order", """
+        ALTER TABLE products ADD COLUMN sort_position BIGINT NOT NULL DEFAULT 0;
+        UPDATE products SET sort_position=id;
+
+        UPDATE products SET category='chocolate'
+        WHERE category='sweet' AND LOWER(name) ~
+            '(schoko|kakao|kinderriegel|kinder[ -]*country|hanuta|knoppers|bal+isto|duplo|oreo|prinzenrolle|doppelkeks|twix|snickers|mars)';
+
+        UPDATE products p SET icon=match.icon
+        FROM (
+            SELECT id, CASE
+                WHEN LOWER(TRIM(name)) ~ '^(cola|coca[ -]?cola|pepsi)([^a-z]|$)' THEN 'cola'
+                WHEN LOWER(TRIM(name)) ~ '^(limo(nade)?|fanta|sprite)([^a-z]|$)' THEN 'limo'
+                WHEN LOWER(name) ~ '(kartoffelchips|(^|[^a-z])chips([^a-z]|$))' THEN 'chips'
+                WHEN LOWER(name) ~ '(nic[ .-]*nacs|erdnüsse)' THEN 'peanuts'
+                WHEN LOWER(name) ~ '(studentenfutter|nussmix|nuss[ -]mix)' THEN 'trail-mix'
+                WHEN LOWER(name) ~ 'mr[. ]*[ -]*tom' THEN 'mr-tom'
+                WHEN LOWER(name) ~ 'hanuta' THEN 'hanuta'
+                WHEN LOWER(name) ~ 'knoppers[ -]+riegel' THEN 'knoppers-bar'
+                WHEN LOWER(name) ~ 'schokoladentafel' THEN 'chocolate-tablet'
+                WHEN LOWER(name) ~ 'schokoriegel' THEN 'chocolate-bar'
+                WHEN LOWER(name) ~ '(^|[^a-z])twix([^a-z]|$)' THEN 'twix'
+                WHEN LOWER(name) ~ '(^|[^a-z])mentos([^a-z]|$)' THEN 'mentos'
+                WHEN LOWER(name) ~ '(^|[^a-z])maoam([^a-z]|$)' THEN 'maoam'
+                WHEN LOWER(name) ~ 'bal+isto' THEN 'ballisto'
+                WHEN LOWER(name) ~ '(^|[^a-z])oreo([^a-z]|$)' THEN 'oreo'
+                WHEN LOWER(name) ~ '(doppelkeks|prinzenrolle)' THEN 'double-biscuit'
+                WHEN LOWER(name) ~ '(^|[^a-z])snickers([^a-z]|$)' THEN 'snickers'
+                WHEN LOWER(name) ~ '(^|[^a-z])mars([^a-z]|$)' THEN 'mars'
+            END AS icon FROM products WHERE deleted=0
+        ) match
+        WHERE match.id=p.id AND match.icon IS NOT NULL;
+    """),
 )
 LATEST_VERSION = MIGRATIONS[-1].version
 

@@ -60,6 +60,61 @@ class PostgreSQLTests(unittest.TestCase):
         return db.execute("INSERT INTO people (card,first,last,department,created) VALUES (%s,'Test','Person','R1',%s) RETURNING id",
                           (card, store.now())).fetchone()["id"]
 
+    def test_rc3_migration_and_terminal_order_preserve_product_assignments(self):
+        with self.connect() as db:
+            schema.migrate(db, schema.MIGRATIONS[:7])
+            db.execute("INSERT INTO terminals (id) VALUES ('a'),('b')")
+            db.execute("INSERT INTO settings VALUES ('catalog_seeded','1')")
+            products = [('cold', 'Limo', 'energy'), ('hot', 'Kaffee', 'coffee'),
+                        ('sweet', 'Oreo', 'cookie'), ('sweet', 'Prinzenrolle Schoko', 'cookie'),
+                        ('sweet', 'Maoam Himbeere', 'candy'), ('sweet', 'Fruchtbonbon', 'candy')]
+            ids = []
+            for category, name, icon in products:
+                ids.append(db.execute("""INSERT INTO products (category,name,cents,icon)
+                                         VALUES (%s,%s,100,%s) RETURNING id""",
+                                      (category, name, icon)).fetchone()["id"])
+            db.execute("INSERT INTO product_terminals SELECT id,'a' FROM products")
+            db.execute("INSERT INTO product_terminals VALUES (%s,'b')", (ids[1],))
+        self.initialize()
+        with self.connect() as db:
+            categories = [(p["id"], p["category"], p["icon"]) for p in store.available_products(db, "a")]
+            self.assertEqual(categories, list(zip(ids,
+                ('cold', 'hot', 'chocolate', 'chocolate', 'sweet', 'sweet'),
+                ('limo', 'coffee', 'oreo', 'double-biscuit', 'maoam', 'candy'))))
+            server.admin_operations.move_product(db, {"group": "drink", "id": ids[1], "neighbor": ids[0]}, "Test")
+            reordered = store.available_products(db, "a")
+            self.assertEqual([p["id"] for p in reordered[:2]], [ids[1], ids[0]])
+            self.assertEqual([p["id"] for p in store.available_products(db, "b")], [ids[1]])
+            self.assertEqual(store.price_cart(reordered, [(ids[0], 1, 100), (ids[1], 1, 100)], lambda: 0)["loyalty_delta"], 1)
+            with self.assertRaises(store.Problem) as rejected:
+                server.admin_operations.move_product(db, {"group": "drink", "id": ids[1], "neighbor": ids[2]}, "Test")
+            self.assertEqual(rejected.exception.status, 409)
+
+    def test_reversing_payments_and_corrections_is_idempotent_and_preserves_paypal_reference(self):
+        self.initialize()
+        with self.connect() as db:
+            person = self.person(db)
+            cash = finance.cash(db, person, "a", "a" * 32, 500)["entry"]
+            correction = store.entry(db, person, "correction", -125, "Test")
+            finance.paypal_prepare(db, person, "a", "b" * 32, 250)
+            payment = db.execute("SELECT id FROM paypal_requests WHERE person=%s", (person,)).fetchone()["id"]
+            finance.paypal_resolve(db, payment, "Test", cents=250, transaction="SYNTHETIC-42", key=b"test-key")
+            booking = finance.paypal_overview(db, "confirmed", 2**53 - 1)["payments"][0]["booking"]
+            self.assertEqual(store.balance(db, person), 625)
+            for original in (cash, correction, booking, cash):
+                server.admin_operations.reverse_booking(db, {"id": original, "note": "Teststorno"}, "Test")
+            self.assertEqual(store.balance(db, person), 0)
+            self.assertIsNone(store.pending_kiosk_booking(db, person))
+            rows = store.list_journal(db, person, 2**53 - 1)["entries"]
+            self.assertEqual(len(rows), 6)
+            self.assertEqual({r["reversed_kind"] for r in rows if r["kind"] == "reversal"}, {"payment", "correction"})
+            paypal = finance.paypal_overview(db, "confirmed", 2**53 - 1)["payments"][0]
+            self.assertEqual(paypal["transaction_ref"], "SYNTHETIC-42")
+            self.assertIsNotNone(paypal["reversed_by"])
+            self.assertEqual(db.execute("SELECT COUNT(*) AS count FROM monthly_sales").fetchone()["count"], 0)
+            with ZipFile(BytesIO(finance.balances_export(db, finance.local_date(datetime.now(timezone.utc))).content)) as xlsx:
+                self.assertIn("xl/worksheets/sheet1.xml", xlsx.namelist())
+
     def test_fresh_database_migrates_and_repeated_start_is_unchanged(self):
         self.initialize()
         with self.connect() as db:
@@ -676,7 +731,7 @@ class PostgreSQLTests(unittest.TestCase):
             db.execute("INSERT INTO manual_credentials (person,pin_hash) VALUES (%s,'old-hash')", (existing,))
         app = server.App({}, self.config)
         with self.connect() as db:
-            self.assertEqual(schema.schema_status(db)[-1]["name"], "manual_account_setup")
+            self.assertEqual(schema.schema_status(db)[6]["name"], "manual_account_setup")
             self.assertEqual(app.account(db, person=existing)["pin_hash"], "old-hash")
             self.assertFalse(app.account(db, person=existing)["pin_temporary"])
             self.assertEqual(app.account(db, person=existing)["card"], "synthetic-test-card")
@@ -786,7 +841,7 @@ class PostgreSQLTests(unittest.TestCase):
         owner = self.feature_admin(app, "owner", True)
         query = {"terminal": ["a"]}
         catalog, _ = app.route(None, "GET", server.PREVIEW_PATH, query, {}, owner)
-        self.assertEqual((catalog["receipt_seconds"], catalog["cash_receipt_seconds"]), (8, 5))
+        self.assertEqual((catalog["session_idle"], catalog["receipt_seconds"], catalog["cash_receipt_seconds"]), (20, 10, 8))
         product = next(item for item in catalog["products"] if item["category"] == "hot")
         cart = {"lines": [{"id": product["id"], "qty": 2, "cents": product["cents"]}], "progress": 9}
         with self.assertRaises(store.Problem) as forbidden:

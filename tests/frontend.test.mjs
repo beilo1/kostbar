@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import {acceptsState, canExtendVisit, sessionViewChanged} from '../static/kiosk-session.js';
 import {keyboardMarkup, pinField} from '../static/kiosk-keyboard.js';
 import {loyaltyCardMarkup} from '../static/loyalty-card.js';
-import {shopMarkup} from '../static/shop-view.js';
+import {shopMarkup, showCatalog, terminalCategory} from '../static/shop-view.js';
 import {esc} from '../static/shared.js';
 import {mountProjectFooter, projectNotice, PROJECT_URL} from '../static/site-chrome.js';
 import {columnHeading, table} from '../static/ui-table.js';
@@ -417,4 +417,27 @@ test('technical view shows cleanup failure and the last successful run', () => {
   context.doc.retention.failed_since = null;
   const recovered = vm.runInNewContext(script + '\npackageVersions(doc);', context);
   assert.match(recovered, /Datenbereinigung,Bereit/);
+});
+
+test('the kiosk merges cold and hot beverage presentation and preserves input order and category', () => {
+  const sections = new Map(['#categories', '#category-title', '#category-count', '#products'].map(key => [key, {}]));
+  const products = [
+    {id: 2, name: 'Kaffee', category: 'hot', cents: 100, icon: 'coffee'},
+    {id: 1, name: 'Limo', category: 'cold', cents: 150, icon: 'limo'},
+    {id: 3, name: 'Maoam', category: 'sweet', cents: 50, icon: 'maoam'},
+  ];
+  showCatalog({querySelector: key => sections.get(key)}, {products}, 'drink');
+  assert.equal(sections.get('#category-title').textContent, 'Getränke');
+  const tiles = sections.get('#products').innerHTML;
+  assert.match(tiles, /coffee\.webp/);
+  assert.match(tiles, /Kaffee[\s\S]*Limo/);
+  assert.doesNotMatch(tiles, /Maoam/);
+  assert.equal(terminalCategory(products[0].category), 'drink');
+  assert.equal(products[0].category, 'hot');
+});
+
+test('the shared payment amount field disables browser completion for both payment forms', () => {
+  const paymentForm = section(actions, 'function paymentForm(', '\n  function paypalDetails(');
+  assert.match(paymentForm, /id="payment-form" autocomplete="off"/);
+  assert.match(paymentForm, /name="amount"[^>]*autocomplete="off"/);
 });

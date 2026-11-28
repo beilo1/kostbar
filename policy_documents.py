@@ -181,14 +181,25 @@ def _load_privacy(conn):
     return privacy
 
 
-def _upgrade_terms(conn, terms, deployment, *, session_idle, receipt_seconds, cash_receipt_seconds):
-    timeout_notice = (
+def _timeout_notice(session_idle, receipt_seconds, cash_receipt_seconds):
+    return (
         f"Am gemeinsam genutzten Terminal endet deine Sitzung nach {session_idle} Sekunden ohne Eingabe. "
         f"Nach einem gebuchten Einkauf wirst du nach {receipt_seconds} Sekunden, nach einer gebuchten Barzahlung "
         f"nach {cash_receipt_seconds} Sekunden "
         "automatisch abgemeldet. Dadurch sind deine Kontodaten für die nächste Person am Terminal nicht mehr sichtbar."
     )
+
+
+def _upgrade_terms(conn, terms, deployment, *, session_idle, receipt_seconds, cash_receipt_seconds):
+    timeout_notice = _timeout_notice(session_idle, receipt_seconds, cash_receipt_seconds)
     original_body = body = data.terms_body(terms)
+    if _mark_notice(conn, "kiosk_timeout_notice_v2"):
+        legacy = (
+            "Am gemeinsam genutzten Terminal endet deine Sitzung nach 15 Sekunden ohne Eingabe. "
+            "Nach einem gebuchten Einkauf oder einer gebuchten Barzahlung wirst du nach 5 Sekunden "
+            "automatisch abgemeldet. Dadurch sind deine Kontodaten für die nächste Person am Terminal nicht mehr sichtbar."
+        )
+        body = body.replace(legacy, timeout_notice).replace(_timeout_notice(15, 8, 5), timeout_notice)
     if _mark_notice(conn, "terminal_wifi_notice_v2"):
         body = body.replace(LEGACY_TERMINAL_WIFI_NOTICE, TERMINAL_WIFI_NOTICE)
     for marker, title, notices in (

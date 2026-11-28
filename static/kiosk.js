@@ -24,7 +24,7 @@ if (instance) history.replaceState(null, '', location.pathname + location.search
 let state = null;
 let deadline = 0;
 let catalog = {products: [], categories: {}};
-let category = 'cold';
+let category = 'drink';
 let cart = new Map();
 let requestKey;
 let pending = false;
@@ -69,9 +69,16 @@ function renderIdle() {
       <div class="form-actions"><button class="button outline" data-manual>Ohne Ausweis anmelden</button></div>
     </section>
     <section class="tap-panel" aria-label="Anmeldung mit Dienstausweis">
-      <div class="tap-tag">${icon('card', 19)}<span>KARTENANMELDUNG</span></div>
+      <div class="tap-tag">
+        <span class="reader-mark"><img src="/static/nfc-logo.svg" width="28" height="28" alt=""></span>
+        <span>NFC-Kartenanmeldung</span>
+      </div>
       <div class="terminal-art">${terminalArt()}</div>
-      <div class="tap-copy"><h2>Ausweis anhalten</h2><p>Halte deinen Dienstausweis kurz an den Kartenleser.</p></div>
+      <div class="tap-instructions">
+        <div class="tap-copy"><h2>Ausweis anhalten</h2>
+          <p>Halte deinen Dienstausweis an den Kartenleser rechts neben dem Bildschirm.</p></div>
+        <span class="reader-arrow" aria-hidden="true">${icon('arrow', 38)}</span>
+      </div>
     </section>
   </div>`;
 }
@@ -326,7 +333,7 @@ function applyState(next) {
   if (newVisit || next.stage === 'idle') {
     cart = new Map();
     requestKey = undefined;
-    category = 'cold';
+    category = 'drink';
   }
   if (newVisit) seenBookings.clear();
   if (next.booking || next.stage !== 'shop' || uncertainBooking?.body.visit !== next.visit) uncertainBooking = undefined;

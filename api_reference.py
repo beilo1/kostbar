@@ -76,10 +76,11 @@ OPERATIONS = (
     ("POST", "/api/admin/person-create", "Admin", "Legt ein Konto mit Start-PIN ohne Karte und Zustimmung an.", "first, last, department, pin, pin_confirmation"),
     ("POST", "/api/admin/reset-pin", "Admin", "Setzt die PIN zurück oder vergibt für ein karteloses Konto eine Start-PIN.", "id, pin?, pin_confirmation?"),
     ("POST", "/api/admin/product", "Admin", "Legt ein Produkt an oder bearbeitet Preis, Status und Standorte.", "id?, name, category, icon, cents, active, terminals"),
+    ("POST", "/api/admin/product-order", "Admin", "Tauscht zwei benachbarte Produkte einer Terminal-Kategorie.", "group, id, neighbor"),
     ("POST", "/api/admin/product-status", "Admin", "Archiviert oder reaktiviert ein Produkt.", "id, active"),
     ("POST", "/api/admin/delete-product", "Super-Admin", "Blendet ein Produkt dauerhaft aus Sortiment und Verwaltung aus; historische Daten bleiben erhalten.", "id"),
     ("POST", "/api/admin/adjust", "Admin", "Bucht eine Zahlung oder eine Saldenkorrektur.", "id, kind, cents, note, request"),
-    ("POST", "/api/admin/reverse", "Admin", "Erstellt eine Gegenbuchung für einen Kauf.", "id, note"),
+    ("POST", "/api/admin/reverse", "Admin", "Erstellt eine Gegenbuchung für einen Kauf, eine Zahlung oder eine Saldenkorrektur.", "id, note"),
     ("POST", "/api/admin/paypal-confirm", "Admin", "Ordnet eine externe PayPal-Zahlung anhand ihrer Transaktions-ID zu.", "id, cents, transaction"),
     ("POST", "/api/admin/paypal-reject", "Admin", "Lehnt eine offene PayPal-Meldung mit Begründung ab.", "id, note"),
 )
