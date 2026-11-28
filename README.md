@@ -2,7 +2,7 @@
 
 KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am Touchterminal melden sich Nutzer mit NFC-Karte oder PIN an, wählen Produkte und buchen den Einkauf auf ihr Kassenkonto. Das Kassen-Team verwaltet Sortiment, Zahlungen und Auswertungen im Browser.
 
-![KoSTbar-Terminal Pausenküche mit Begrüßung „Hallo, Max“, Sammelkarte, Bezahlen, Saldo und Warenkorb](docs/images/frontend.png)
+![KoSTbar-Terminal mit Begrüßung „Hallo, Max“, Getränkesortiment mit Cola- und Limo-Symbolen sowie Sammelkarte und Warenkorb](docs/images/frontend.png)
 
 ## Funktionen
 
@@ -14,7 +14,7 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 ### Terminal vor der Anmeldung
 
-![Startseite des KoSTbar-Terminals Pausenküche mit Kartenanmeldung und PIN-Option](docs/images/terminal-start.png)
+![KoSTbar-Startseite mit NFC-Logo, Pfeil zum Kartenleser rechts und PIN-Anmeldung](docs/images/terminal-start.png)
 
 ### Sammelkarte am Terminal
 
@@ -24,13 +24,13 @@ KoSTbar ist eine selbst gehostete Selbstbedienungskasse für den Pausenshop. Am 
 
 #### Kassenbuch
 
-![Kassenbuch der Pausenküche mit Käufen und Barzahlungen von Max Berger, Nora Winter und Theo Sommer](docs/images/backend.png)
+![Kassenbuch mit Käufen, Barzahlungen und einer verknüpften Stornobuchung für fiktive Konten](docs/images/backend.png)
 
 #### Benutzerverwaltung
 
 ![Benutzerverwaltung für Max Berger, Nora Winter und Theo Sommer mit Salden, Sammelkarten und Kontoaktionen](docs/images/benutzerverwaltung.png)
 
-Die Screenshots zeigen fiktive Beispieldaten. Die [Bedienungsanleitung](docs/BETRIEB.md#nutzungsbedingungen-und-abnahme) beschreibt die Benutzerliste, den Storno-Filter und den Dialog **Projekt und Lizenz**.
+Die Screenshots zeigen KoSTbar 40.1.0-rc.3 mit fiktiven Beispieldaten. Die [Bedienungsanleitung](docs/BETRIEB.md#nutzungsbedingungen-und-abnahme) beschreibt die Benutzerliste, den Storno-Filter und den Dialog **Projekt und Lizenz**.
 
 ## Hardware
 
@@ -46,11 +46,11 @@ NAS, Terminals und der Admin-Rechner benötigen Netzwerkzugang, DNS und eine ver
 
 ![Fotorealistische Visualisierung des KoSTbar-Terminals Pausenküche mit limettengrünem 3D-Druck-Gehäuse und USB-NFC-Leser](docs/images/terminal-render.jpg)
 
-*Visualisierung des 3D-gedruckten Terminalgehäuses mit der KoSTbar-Produktansicht.*
+*Visualisierung des 3D-gedruckten Terminalgehäuses mit der Getränkeansicht aus 40.1.0-rc.3.*
 
 ## Installation
 
-Für eine bestehende Installation führt [Update auf v40.1.0-rc.3](docs/UPDATE-RC3.md) vom Patch über Sicherung und App-Wechsel bis zur Abnahme und Einrichtung des Saldenexports. Für eine Neuinstallation gelten die folgenden Schritte.
+Für eine bestehende Installation beschreibt [Update auf v40.1.0-rc.3](docs/UPDATE-RC3.md) Sicherung, App-Wechsel, Abnahme und Saldenexport. Für eine Neuinstallation gelten die folgenden Schritte.
 
 | | QNAP | Synology |
 | --- | --- | --- |
@@ -60,11 +60,11 @@ Für eine bestehende Installation führt [Update auf v40.1.0-rc.3](docs/UPDATE-R
 
 ### Neuinstallation
 
-Verwende den Quellstand, zu dem diese Anleitung gehört. Für einen noch nicht gemergten Kandidaten den [Patch auf dem RC-Branch übernehmen](docs/UPDATE-RC3.md#1-änderungen-auf-dem-rc-branch-übernehmen) oder den veröffentlichten Refactoring-Branch auschecken. Wenn der Kandidat bereits in `main` gemergt ist, kannst du den entsprechenden Commit aus dem öffentlichen Repo verwenden. Vor dem Build den erwarteten Wert `40.1.0-rc.3` im Versionslabel des Dockerfiles und den ausgecheckten Commit prüfen.
+Für den Release-Kandidaten den Branch `refactor/kostbar-backlog` auschecken. Vor dem Build die Version `40.1.0-rc.3` im Dockerfile prüfen.
 
 1. Das [gemeinsame App-Image bauen](#app-image-bereitstellen).
 2. Nach der passenden NAS-Anleitung eine neue Konfiguration erzeugen. Der Beispiel-Projektname für Docker Compose ist `kostbar`. Bei einer zusätzlichen Instanz einen eigenen Projektnamen sowie passende Bind-Adressen, Ports und Proxy-Ziele verwenden.
-3. Den Verkaufspunkt koppeln und die [Erstabnahme](docs/BETRIEB.md#erstabnahme) durchführen. `schema-status` zeigt die Versionen **1 bis 7**, beginnend mit `v35_baseline`.
+3. Den Verkaufspunkt koppeln und die [Erstabnahme](docs/BETRIEB.md#erstabnahme) durchführen. `schema-status` zeigt die Versionen **1 bis 8**, beginnend mit `v35_baseline` und endend mit `catalog_categories_and_order`.
 4. Vor der Freigabe die Datenschutzerklärung an die tatsächliche Umgebung anpassen und veröffentlichen. [`privacy.md`](privacy.md) ist die Ausgangsvorlage. Die [Betriebsanleitung](docs/BETRIEB.md) erläutert die Bearbeitung in der Verwaltung.
 
 Weitere Terminals legst du als Super-Admin unter **Verkauf → Verkaufspunkte** an. Lade das jeweilige private Geräteprofil herunter, richte den Pi ein und bestätige dessen Kopplungscode. Produkte weist du unter **Sortiment** zu.
@@ -91,7 +91,7 @@ Alternativ die Image-Referenz einer Registry als `KOSTBAR_APP_IMAGE` in der jewe
 
 Für den Wechsel von RC2 zu RC3 stehen Vorgehen, Abnahme und Rückweg in der [Update-Anleitung](docs/UPDATE-RC3.md). Für ältere Installationen dokumentiert die [RC2-Anleitung](docs/UPDATE-v40.1.md) den vorherigen NAS- und Pi-Wechsel.
 
-Der Kandidat ergänzt Migration 7 (`manual_account_setup`) für manuell angelegte Konten. Für die Rückkehr zu einer App-Version mit Schema 6 wird der Datenbankstand vor dieser Migration benötigt. [NAS-Rückweg](docs/UPDATE-v40.1.md#nas-rückweg)
+RC3 übernimmt Kategorien und Sortierreihenfolge mit Migration 8 (`catalog_categories_and_order`). Der Rückweg zu RC2 erfordert eine Sicherung vor dieser Migration. [NAS-Rückweg](docs/UPDATE-RC3.md#5-rückweg)
 
 ## Entwicklung und Lizenz
 
