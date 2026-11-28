@@ -56,7 +56,7 @@ export function terminalArt() {
 const artTones = {
   water: 'sage', lemon: 'yellow', apple: 'sage', energy: 'gray', coffee: 'oat', cappuccino: 'oat',
   milk: 'oat', cola: 'sage', limo: 'sage', salami: 'oat', noodles: 'oat', pasta: 'oat', chips: 'sage',
-  peanuts: 'oat', 'trail-mix': 'sage', cookie: 'oat', wafer: 'yellow', bar: 'oat', candy: 'sage',
+  'tuc-cracker': 'yellow', peanuts: 'oat', 'trail-mix': 'sage', cookie: 'oat', wafer: 'yellow', bar: 'oat', candy: 'sage',
   'mr-tom': 'oat', hanuta: 'sage', 'knoppers-bar': 'oat', 'chocolate-bar': 'oat', 'chocolate-tablet': 'sage',
   twix: 'oat', mentos: 'sage', maoam: 'oat', ballisto: 'oat', oreo: 'sage', 'double-biscuit': 'oat',
   snickers: 'oat', mars: 'oat',

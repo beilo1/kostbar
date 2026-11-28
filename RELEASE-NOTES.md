@@ -5,7 +5,7 @@ Vergleich mit dem öffentlichen main-Stand v38.0.1 (ba8bc6a). Die Änderungen um
 ## Neu in 40.1.0-rc.3
 
 - Das Kassenbuch kann Einkäufe, Zahlungen und Saldenkorrekturen mit einer verknüpften Gegenbuchung stornieren. PayPal-Zahlungen behalten ihre Transaktionsreferenz.
-- Die Produktanlage und -bearbeitung bieten 32 Bilder mit einer Vorschaukachel. Die Reihenfolge lässt sich je Terminal-Kategorie im Sortiment ändern. Das Terminal zeigt Kalt- und Heißgetränke zusammen an. Die Sammelkarte zählt weiterhin nur Heißgetränke. „Süßes“ und „Schokoladiges“ stehen als getrennte Kategorien bereit.
+- Die Produktanlage und -bearbeitung bieten 33 Bilder mit einer Vorschaukachel. Die Reihenfolge lässt sich je Terminal-Kategorie im Sortiment ändern. Das Terminal zeigt Kalt- und Heißgetränke zusammen an. Die Sammelkarte zählt weiterhin nur Heißgetränke. „Süßes“ und „Schokoladiges“ stehen als getrennte Kategorien bereit.
 - Die Startseite zeigt das NFC Forum N-Mark und einen Pfeil zum Kartenleser. Das Betragsformular schaltet Formularvorschläge ab. Die Abmeldezeiten betragen 20 Sekunden bei Inaktivität, 10 Sekunden nach einem Kauf und 8 Sekunden nach einer Barzahlung.
 - Der NAS-Host kann die Saldenliste täglich um 23 Uhr als XLSX sichern und alte Exportdateien nach 90 Tagen bereinigen. Der [Update-Leitfaden](docs/UPDATE-RC3.md) enthält Befehle für QNAP und Synology.
 - Schema-Migration 8 übernimmt die bestehende Reihenfolge und ordnet bekannte Schokoladenprodukte und Produktsymbole zu. Das NFC-Zeichen stammt aus [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:NFC_logo.svg), SVG von Eg0rk0t323 unter CC0 1.0. Das N-Mark ist ein Kennzeichen des NFC Forum.
